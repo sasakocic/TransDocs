@@ -91,11 +91,19 @@ def upload_file():
                 )
 
         # Get form data for translation
-        file = request.files["input_file"]
+        file = request.files.get("input_file")
         target_lang = request.form.get("target_lang", "").strip()
         src_lang = request.form.get("src_lang", "").strip() or None
         api_token = request.form.get("api_token", "").strip() or None
-        model = request.form.get("model", "llama3.2").strip()
+        model = request.form.get("model", "")
+
+        if not model:
+            return render_template(
+                "upload.html",
+                error="Please select a valid model from the dropdown (query first)",
+            )
+        model = model.strip()
+
         api_url = request.form.get("api_url", "http://localhost:11434").strip()
 
         # Auto-append /api/chat endpoint (modern Ollama API)

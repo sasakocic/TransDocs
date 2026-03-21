@@ -102,10 +102,14 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.requests.post")
     def test_call_ollama_api_translate(self, mock_post):
         """Test API call for translation mode."""
-        # Mock successful response
+        # Mock successful response with proper attributes
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"response": "This is the translated text."}
+        mock_response.headers = {}
+        mock_response.text = (
+            '{"response": "This is the translated text."}'  # Make it subscriptable
+        )
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -114,7 +118,7 @@ class TestTransDoc(unittest.TestCase):
             text="Hello world",
             src_lang="en",
             target_lang="de",
-            model="llama3.2",
+            model="qwen2.5-coder:1.5b-base",
             api_token=None,
             api_url="http://localhost:11434/api/generate",
             mode="translate",
@@ -125,10 +129,14 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.requests.post")
     def test_call_ollama_api_proofread(self, mock_post):
         """Test API call for proofreading mode."""
-        # Mock successful response
+        # Mock successful response with proper attributes
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"response": "This is the corrected text."}
+        mock_response.headers = {}
+        mock_response.text = (
+            '{"response": "This is the corrected text."}'  # Make it subscriptable
+        )
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -137,7 +145,7 @@ class TestTransDoc(unittest.TestCase):
             text="Hello wrld",  # Intentional typo for proofreading test
             src_lang="en",
             target_lang="en",
-            model="llama3.2",
+            model="qwen2.5-coder:1.5b-base",
             api_token=None,
             api_url="http://localhost:11434/api/generate",
             mode="proofread",
@@ -148,10 +156,11 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.requests.post")
     def test_call_ollama_api_error(self, mock_post):
         """Test API call with error response."""
-        # Mock failed response
+        # Mock failed response with proper headers dict
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
+        mock_response.headers = {}
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -160,7 +169,7 @@ class TestTransDoc(unittest.TestCase):
             text="Test text",
             src_lang="en",
             target_lang="de",
-            model="llama3.2",
+            model="qwen2.5-coder:1.5b-base",
             api_token=None,
             api_url="http://localhost:11434/api/generate",
             mode="translate",
@@ -189,7 +198,7 @@ class TestTransDoc(unittest.TestCase):
         process_paragraph(
             para=mock_para,
             src_lang="en",
-            model="llama3.2",
+            model="qwen2.5-coder:1.5b-base",
             target_lang="de",
             api_token=None,
             api_url="http://localhost:11434/api/generate",
@@ -210,7 +219,7 @@ class TestTransDoc(unittest.TestCase):
         process_paragraph(
             para=mock_para,
             src_lang="en",
-            model="llama3.2",
+            model="qwen2.5-coder:1.5b-base",
             target_lang="de",
             api_token=None,
             api_url="http://localhost:11434/api/generate",
@@ -235,17 +244,17 @@ class TestCLIArguments(unittest.TestCase):
         args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
         self.assertEqual(args.input, "test.docx")
 
-    def test_optional_arguments(self):
-        """Test optional arguments have defaults."""
+    def test_model_is_required(self):
+        """Test that model argument is required."""
         import argparse
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("-m", "--model", type=str, default="llama3.2")
+        parser.add_argument("-m", "--model", type=str, default="")
         parser.add_argument("-s", "--source", type=str, default=None)
         parser.add_argument("--proofread", action="store_true")
 
-        args = parser.parse_args([])
-        self.assertEqual(args.model, "llama3.2")
+        args = parser.parse_args(["-m", ""])
+        self.assertEqual(args.model, "")
         self.assertIsNone(args.source)
         self.assertFalse(args.proofread)
 

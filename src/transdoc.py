@@ -325,8 +325,8 @@ def main():
         "-m",
         "--model",
         type=str,
-        default="llama3.2",
-        help="The model name to use for translation/proofreading.",
+        default="",
+        help="Model name (required). Leave empty to error out if not provided.",
     )
     parser.add_argument(
         "-i",
@@ -388,6 +388,10 @@ def main():
         help="Ollama API base URL (default: http://localhost:11434). Auto-appends /api/chat.",
     )
     args = parser.parse_args()
+
+    # Validate model is provided
+    if not args.model or not args.model.strip():
+        parser.error("Model name (-m/--model) is required")
 
     # Auto-append /api/chat endpoint (modern Ollama API)
     if not args.api_url.endswith(("/api/generate", "/api/chat")):
