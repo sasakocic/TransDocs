@@ -1,13 +1,14 @@
 """
 Unit tests for TransDocs - Document Translation and Proofreading Tool.
 """
+
 import unittest
 from unittest.mock import Mock, patch
 import sys
 import os
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 class TestTransDoc(unittest.TestCase):
@@ -93,9 +94,7 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "This is the translated text."
-        }
+        mock_response.json.return_value = {"response": "This is the translated text."}
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -118,9 +117,7 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "This is the corrected text."
-        }
+        mock_response.json.return_value = {"response": "This is the corrected text."}
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -258,9 +255,7 @@ class TestCLIArguments(unittest.TestCase):
         parser.add_argument("-t", "--target", type=str, required=True)
 
         # Should not raise when all required args provided
-        args = parser.parse_args(
-            ["-i", "test.docx", "-o", "out.docx", "-t", "en"]
-        )
+        args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
         self.assertEqual(args.input, "test.docx")
 
     def test_optional_arguments(self):
