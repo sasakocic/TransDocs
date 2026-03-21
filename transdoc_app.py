@@ -1,7 +1,13 @@
+"""
+Flask web application for TransDocs - Document Translation and Proofreading Tool.
+"""
+
+import os
 from flask import Flask, render_template, request, redirect, url_for, send_file
 from werkzeug.utils import secure_filename
-from . import transdoc
-import os
+
+# Import from the src package
+from src.transdoc import process_document
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -18,9 +24,11 @@ app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
@@ -40,15 +48,27 @@ def upload_file():
             file.save(input_filepath)
 
             # Call your translation function here
-            transdoc.process_document(input_filepath, output_filepath, model, target_lang, api_token, src_lang)
+            process_document(
+                input_filepath, 
+                output_filepath, 
+                model, 
+                target_lang, 
+                api_token, 
+                src_lang
+            )
 
             return redirect(url_for('download_file', filename=output_filename))
 
     return render_template('upload.html')
 
+
 @app.route('/downloads/<filename>')
 def download_file(filename):
-    return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename), as_attachment=True)
+    return send_file(
+        os.path.join(app.config['OUTPUT_FOLDER'], filename),
+        as_attachment=True
+    )
+
 
 if __name__ == '__main__':
     app.run(debug=True)

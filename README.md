@@ -1,6 +1,21 @@
 # TransDocs
 
-This project provides a Python script for translating or proofreading Microsoft Word documents (`.docx` files) using the Ollama API. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
+This project provides a Python tool for translating or proofreading Microsoft Word documents (`.docx` files) using the Ollama API. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
+
+**Project Structure:**
+```
+TransDocs/
+├── src/
+│   ├── __init__.py       # Package initialization, exports main functions
+│   └── transdoc.py       # Core translation logic
+├── tests/
+│   ├── test_transdoc.py  # Unit tests
+│   └── __init__.py
+├── transdoc_app.py       # Flask web application
+├── README.md             # This file
+├── requirements.txt      # Python dependencies
+└── ... (other files)
+```
 
 This script is currently not for Production scale workloads but can be used for personal translation tasks.
 
@@ -24,9 +39,8 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
       - [Arguments](#arguments)
       - [Examples](#examples)
       - [Running the Script](#running-the-script)
-  - [Web GUI Implementation (Untested)](#web-gui-implementation-untested)
-    - [Setup](#setup)
-    - [Running the Web App](#running-the-web-app)
+    - [Web GUI](#web-gui)
+  - [Testing](#testing)
   - [Logging](#logging)
     - [Adjusting Logging Levels](#adjusting-logging-levels)
   - [Troubleshooting](#troubleshooting)
@@ -44,6 +58,7 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 - **CPU Support**: Works on CPU-only systems (no GPU required).
 - **Optional Authentication**: API token is optional for local Ollama instances without authentication requirements.
 - **Detailed Logging**: Provides comprehensive logs to both console and file (`translation_debug.log`) for monitoring and debugging.
+- **Web GUI**: Flask-based web interface for easy document upload and translation.
 
 ## Requirements
 
@@ -89,7 +104,7 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 
 ### Command-Line Interface
 
-The script `transdoc.py` can be executed from the command line to translate or proofread documents.
+The script `src/transdoc.py` can be executed from the command line to translate or proofread documents.
 
 #### Arguments
 
@@ -107,7 +122,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 1. **Translate a Document with Automatic Source Language Detection**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en
+   python src/transdoc.py -i input.docx -o output.docx -t en
    ```
 
    This command translates `input.docx` to English, saving the result as `output.docx`. The script will detect the source language automatically. No API token required for local Ollama without authentication.
@@ -115,7 +130,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 2. **Translate a Document with Specified Source Language**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en -s fr
+   python src/transdoc.py -i input.docx -o output.docx -t en -s fr
    ```
 
    This command translates `input.docx` from French to English.
@@ -123,7 +138,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 3. **Translate Using a Specific Model and API Token**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t de -m llama3.2:latest -k your_api_token
+   python src/transdoc.py -i input.docx -o output.docx -t de -m llama3.2:latest -k your_api_token
    ```
 
    This command uses `llama3.2:latest` for translation to German with an API token.
@@ -131,7 +146,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 4. **Translate Using a Remote Ollama Instance**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t de -u http://192.168.1.50:11434/
+   python src/transdoc.py -i input.docx -o output.docx -t de -u http://192.168.1.50:11434/
    ```
 
    This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/generate`.
@@ -139,7 +154,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 5. **Proofread a Document (Same Language)**
 
    ```bash
-   python transdoc.py -i document.docx -o corrected.docx -s en -t en
+   python src/transdoc.py -i document.docx -o corrected.docx -s en -t en
    ```
 
    When source and target languages are the same, the script automatically runs in proofreading mode to fix grammar, spelling, and clarity issues.
@@ -147,7 +162,7 @@ The script `transdoc.py` can be executed from the command line to translate or p
 6. **Force Proofreading Mode**
 
    ```bash
-   python transdoc.py -i document.docx -o corrected.docx -s en -t de --proofread
+   python src/transdoc.py -i document.docx -o corrected.docx -s en -t de --proofread
    ```
 
    The `--proofread` flag forces proofreading mode even when source and target languages differ.
@@ -163,46 +178,21 @@ The script `transdoc.py` can be executed from the command line to translate or p
 2. **Execute the Script**
 
    ```bash
-   python transdoc.py [arguments]
+   python src/transdoc.py [arguments]
    ```
 
    Replace `[arguments]` with the appropriate command-line arguments as shown in the examples.
 
-### Quick Test
+### Web GUI
 
-To test the installation, create a sample document:
+A web-based interface is available via `transdoc_app.py`.
 
-```bash
-python create_test_doc.py
-python transdoc.py -i test_document.docx -o output.docx -s en -t de -m llama3.2
-```
-
-## Web GUI Implementation (Untested)
-
-A web-based interface can enhance usability by allowing users to upload documents and receive translations without using the command line. Below is a suggested implementation using Flask.
-
-### Setup
-
-1. **Install Flask and Werkzeug**
-
-   ```bash
-   pip install flask werkzeug
-   ```
-
-2. **Create `app.py`** (example implementation needed)
-
-```python
-from flask import Flask, render_template, request, send_file
-import os
-# Add your Flask app logic here
-```
-
-### Running the Web App
+#### Running the Web App
 
 1. **Start the Flask Application**
 
    ```bash
-   python app.py
+   python transdoc_app.py
    ```
 
 2. **Access the Web Interface**
@@ -221,6 +211,25 @@ import os
 4. **Download the Translated Document**
 
    After the translation is complete, you'll be redirected to a page where you can download the translated document.
+
+## Testing
+
+Run the unit tests using pytest or unittest:
+
+```bash
+# Using pytest
+pytest tests/
+
+# Using unittest
+python -m unittest discover tests/
+```
+
+The test suite covers:
+- Language detection (English, German, insufficient text)
+- API calls for translation and proofreading modes
+- Error handling
+- Paragraph processing
+- CLI argument parsing
 
 ## Logging
 
