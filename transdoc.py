@@ -78,9 +78,12 @@ Text: {text}"""
     }
 
     headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {api_token}'
+        'Content-Type': 'application/json'
     }
+
+    # Add authorization header only if token is provided
+    if api_token:
+        headers['Authorization'] = f'Bearer {api_token}'
 
     try:
         logger.debug(f"Sending API request with payload: {payload}")
@@ -192,7 +195,7 @@ def main():
     parser.add_argument('-i', '--input', type=str, required=True, dest='input_file', metavar='FILE', help='Path to the input Word document file.')
     parser.add_argument('-o', '--output', type=str, required=True, dest='output_file', metavar='FILE', help='Path to save the output Word document file.')
     parser.add_argument('-t', '--target', type=str, required=True, dest='target_lang', metavar='LANG', help='Target language code (e.g., en, de, fr). Use same as source for proofreading mode.')
-    parser.add_argument('-k', '--api-token', type=str, required=True, dest='api_token', metavar='TOKEN', help='API token for Ollama authentication.')
+    parser.add_argument('-k', '--api-token', type=str, default=None, dest='api_token', metavar='TOKEN', help='API token for Ollama authentication (optional).')
     parser.add_argument('-s', '--source', type=str, default=None, dest='src_lang', metavar='LANG', help='Source language code (e.g., en, de, fr). Auto-detected if not provided. Use same as target for proofreading mode.')
     parser.add_argument('--proofread', action='store_true', help='Force proofreading mode regardless of language match.')
     parser.add_argument('-u', '--url', type=str, default='http://localhost:11434', dest='api_url', metavar='URL', help='Ollama API base URL (default: http://localhost:11434)')
