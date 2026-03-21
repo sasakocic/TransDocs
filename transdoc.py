@@ -50,18 +50,21 @@ def detect_source_language(doc, min_words=50):
         return None
 
 def call_ollama_api(text, src_lang, target_lang, model, api_token):
-    api_url = 'http://<open-webui-host>/ollama/api/generate'
+    api_url = 'http://localhost:11434/api/generate'
 
-    prompt = f"""Translate the following text from {src_lang} to {target_lang}. Use professional terminology.
-Provide the translated text only. For names, dates, URLs and numbers, print the original.
-If the text cannot be translated, print the original.
-Do not provide advice, feedback, context or warnings, print only output:
-{text}"""
+    prompt = f"""You are a professional translator like DeepL. Translate ONLY the text content from {src_lang} to {target_lang}.
+
+Rules:
+- Keep math formulas (e.g., LaTeX, equations), code, symbols, URLs, numbers, dates, proper names unchanged.
+- Use precise technical terminology; preserve meaning, fluency, and structure (lists, emphasis).
+- Output ONLY the translated text—no explanations, warnings, or extras.
+
+Text: {text}"""
 
     payload = {
         'model': model,
         'prompt': prompt,
-        'stream': 'false'
+        'stream': False
     }
 
     headers = {
