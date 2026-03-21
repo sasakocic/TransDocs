@@ -6,6 +6,25 @@ import logging
 from langdetect import detect
 from langdetect.lang_detect_exception import LangDetectException
 
+# ANSI color codes for colorful output
+class ColorFormatter(logging.Formatter):
+    """Custom formatter that adds colors to log levels."""
+    
+    COLORS = {
+        'DEBUG': '\033[36m',      # Cyan
+        'INFO': '\033[32m',       # Green
+        'WARNING': '\033[33m',    # Yellow
+        'ERROR': '\033[31m',      # Red
+        'CRITICAL': '\033[35m',   # Magenta
+    }
+    
+    RESET = '\033[0m'  # Reset color
+    
+    def format(self, record):
+        log_color = self.COLORS.get(record.levelname, self.RESET)
+        record.levelname = f"{log_color}{record.levelname}{self.RESET}"
+        return super().format(record)
+
 # Logging configuration
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -16,12 +35,16 @@ console_handler = logging.StreamHandler()
 file_handler.setLevel(logging.DEBUG)
 console_handler.setLevel(logging.INFO)  # Output to console
 
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
+# Use colorful formatter for console, plain text for file
+console_formatter = ColorFormatter('%(asctime)s - %(levelname)s - %(message)s')
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+console_handler.setFormatter(console_formatter)
+file_handler.setFormatter(file_formatter)
 
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
+
 
 def detect_source_language(doc, min_words=50):
     """
@@ -48,6 +71,7 @@ def detect_source_language(doc, min_words=50):
     except LangDetectException as e:
         logger.error(f"Language detection failed: {e}")
         return None
+
 
 def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode='translate'):
     if mode == 'proofread':
@@ -103,6 +127,7 @@ Text: {text}"""
         logger.exception(f"An error occurred while calling the Ollama API: {e}")
         return text
 
+
 def translate_or_proofread(text, src_lang, target_lang, model, api_token, api_url, force_proofread=False):
     logger.debug(f"Text to process: '{text}'")
 
@@ -124,6 +149,7 @@ def translate_or_proofread(text, src_lang, target_lang, model, api_token, api_ur
     result_text = call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode=mode)
     return result_text
 
+
 def process_paragraph(para, src_lang, model, target_lang, api_token, api_url, force_proofread=False):
     try:
         paragraph_text = ''.join(run.text for run in para.runs)
@@ -140,6 +166,7 @@ def process_paragraph(para, src_lang, model, target_lang, api_token, api_url, fo
             logger.debug("Paragraph is empty or whitespace.")
     except Exception as e:
         logger.exception(f"An error occurred while processing paragraph: {e}")
+
 
 def process_document(input_file, output_file, model, target_lang, api_token, src_lang=None, api_url='http://localhost:11434/api/generate', force_proofread=False):
     try:
@@ -189,6 +216,7 @@ def process_document(input_file, output_file, model, target_lang, api_token, src
     except Exception as e:
         logger.exception(f"An error occurred while processing the document: {e}")
 
+
 def main():
     parser = argparse.ArgumentParser(description='Translate or proofread a Word document using the Ollama API.')
     parser.add_argument('-m', '--model', type=str, default='llama3.2', help='The model name to use for translation/proofreading.')
@@ -210,6 +238,7 @@ def main():
     logger.info(f"Starting processing with API URL: {api_url}")
     process_document(args.input_file, args.output_file, args.model, args.target_lang, args.api_token, args.src_lang, api_url, force_proofread=args.proofread)
     logger.info("Processing completed")
+
 
 if __name__ == "__main__":
     main()
