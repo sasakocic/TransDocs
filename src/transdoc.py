@@ -127,7 +127,7 @@ Text: {text}"""
         parsed_url = urllib.parse.urlparse(api_url)
         endpoint_path = parsed_url.path if parsed_url.path else "/"
 
-        logger.debug(f"=== OLLAMA API CALL DEBUG ===")
+        logger.debug("=== OLLAMA API CALL DEBUG ===")
         logger.debug(f"Full URL: {api_url}")
         logger.debug(f"Endpoint path: {endpoint_path}")
         logger.debug(f"Model: {model}")
@@ -136,7 +136,7 @@ Text: {text}"""
             f"Prompt preview (first 200 chars): {payload.get('messages', [{}])[0].get('content', '')[:200]}"
         )
         logger.debug(f"Request headers: {headers}")
-        logger.debug(f"HTTP method being used: POST")
+        logger.debug("HTTP method being used: POST")
 
         response = requests.post(api_url, json=payload, headers=headers)
         logger.debug(f"Response status code: {response.status_code}")
