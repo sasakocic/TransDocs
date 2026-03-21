@@ -1,7 +1,6 @@
 """
 Unit tests for TransDocs - Document Translation and Proofreading Tool.
 """
-
 import unittest
 from unittest.mock import Mock, patch
 import sys
@@ -94,7 +93,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the translated text."}
+        mock_response.json.return_value = {
+            "response": "This is the translated text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -117,7 +118,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the corrected text."}
+        mock_response.json.return_value = {
+            "response": "This is the corrected text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -204,43 +207,6 @@ class TestTransDoc(unittest.TestCase):
 
         # Should not fail on empty paragraph
 
-    def test_api_url_construction(self):
-        """Test API URL construction with and without trailing slash."""
-        from transdoc import process_document
-
-        # Test URL without trailing slash
-        url1 = "http://localhost:11434"
-        expected1 = "http://localhost:11434/api/generate"
-
-        if not url1.endswith("/api/generate"):
-            constructed1 = f"{url1.rstrip('/')}/api/generate"
-        else:
-            constructed1 = url1
-
-        self.assertEqual(constructed1, expected1)
-
-        # Test URL with trailing slash
-        url2 = "http://localhost:11434/"
-        if not url2.endswith("/api/generate"):
-            constructed2 = f"{url2.rstrip('/')}/api/generate"
-        else:
-            constructed2 = url2
-
-        self.assertEqual(constructed2, expected1)
-
-    def test_api_url_already_has_endpoint(self):
-        """Test that URLs already ending with /api/generate are not modified."""
-        from transdoc import process_document
-
-        url = "http://localhost:11434/api/generate"
-
-        if not url.endswith("/api/generate"):
-            constructed = f"{url.rstrip('/')}/api/generate"
-        else:
-            constructed = url
-
-        self.assertEqual(constructed, url)
-
 
 class TestCLIArguments(unittest.TestCase):
     """Test CLI argument parsing."""
@@ -255,7 +221,9 @@ class TestCLIArguments(unittest.TestCase):
         parser.add_argument("-t", "--target", type=str, required=True)
 
         # Should not raise when all required args provided
-        args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
+        args = parser.parse_args(
+            ["-i", "test.docx", "-o", "out.docx", "-t", "en"]
+        )
         self.assertEqual(args.input, "test.docx")
 
     def test_optional_arguments(self):

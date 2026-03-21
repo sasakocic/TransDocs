@@ -1,4 +1,11 @@
-import re
+"""
+TransDocs - Document Translation and Proofreading Tool
+
+A Python tool for translating Microsoft Word documents using the Ollama API.
+Supports automatic language detection, professional translation quality,
+and proofreading capabilities.
+"""
+
 import argparse
 from docx import Document
 import requests
@@ -31,7 +38,7 @@ class ColorFormatter(logging.Formatter):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-file_handler = logging.FileHandler("translation_debug.log", "w", "utf-8")
+file_handler = logging.FileHandler("translation_debug.log", "w", encoding="utf-8")
 console_handler = logging.StreamHandler()
 
 file_handler.setLevel(logging.DEBUG)
@@ -118,7 +125,9 @@ Text: {text}"""
             logger.debug(f"{mode.capitalize()} text: {result_text}")
             return result_text
         else:
-            logger.error(f"API request failed with status code {response.status_code}")
+            logger.error(
+                f"API request failed with status code {response.status_code}"
+            )
             logger.error(f"Response: {response.text}")
             return text
     except Exception as e:
@@ -132,13 +141,13 @@ def translate_or_proofread(
     logger.debug(f"Text to process: '{text}'")
 
     if not text or not text.strip():
-        logger.warning(f"Text is empty or whitespace: '{text}'")
+        logger.warning("Text is empty or whitespace.")
         return text
 
     # Determine mode based on explicit flag or language match
     if force_proofread:
         mode = "proofread"
-        logger.info(f"Forced proofreading mode (explicit --proofread flag).")
+        logger.info("Forced proofreading mode (explicit --proofread flag).")
     elif src_lang == target_lang:
         mode = "proofread"
         logger.info(
@@ -208,7 +217,9 @@ def process_document(
 
         # Check if we need proofreading or translation
         if force_proofread:
-            logger.info(f"Running in PROOFREADING mode (explicit --proofread flag).")
+            logger.info(
+                "Running in PROOFREADING mode (explicit --proofread flag)."
+            )
         elif src_lang == target_lang:
             logger.info(
                 f"Source ({src_lang}) equals target ({target_lang}). Running in PROOFREADING mode."
