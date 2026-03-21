@@ -52,7 +52,7 @@ jobs:
 
     - name: Install linting dependencies
       run: |
-        pip install black flake8 mypy
+        pip install black flake8 mypy types-requests
 
     - name: Check code formatting with Black
       run: |
