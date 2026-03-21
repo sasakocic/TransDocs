@@ -4,12 +4,12 @@ This project provides a Python script and an untested web GUI for translating Mi
 
 This script is currently not for Production scale workloads but can be used for personal translation tasks.
 
-You need [Ollama](https://github.com/ollama/ollama) and/or [Open-WebUI](https://github.com/open-webui/open-webui) installed and setup with API ports configured.
+You need [Ollama](https://github.com/ollama/ollama) installed and running. The script works with both GPU-accelerated and CPU-only Ollama instances.
 
-- Default Ollama API URL: `http://<ollama-host>:11435/api/generate`
-- Default Open-WebUI URL: `http://<open-webui-host>:3000/ollama/api/generate`
+- Default Ollama API URL: `http://localhost:11434` (base URL, `/api/generate` is auto-appended)
+- Works with any model loaded in your Ollama instance
 
-Speed depends on doc size and number of paragraphs. Running with Nvidia Titan-X with 24GB VRAM using the `glm4` model, estimated average of 1 page a minute.
+Speed depends on doc size, number of paragraphs, and hardware. On CPU-only systems, expect slower performance (potentially minutes per page). GPU acceleration significantly improves speed.
 
 ## Table of Contents
 
@@ -36,6 +36,9 @@ Speed depends on doc size and number of paragraphs. Running with Nvidia Titan-X 
 - **Automatic Source Language Detection**: Detects the source language by analyzing at least 50 words from the document.
 - **Manual Source Language Specification**: Option to manually specify the source language using the `-s` or `--src_lang` argument.
 - **Translation of All Document Elements**: Translates paragraphs, tables, headers, and footers within the document.
+- **Professional Translation Quality**: Enhanced prompts for DeepL-like quality translations that preserve technical content.
+- **Flexible API Configuration**: Accepts base URL and automatically appends `/api/generate`.
+- **CPU Support**: Works on CPU-only systems (no GPU required).
 - **Detailed Logging**: Provides comprehensive logs to both console and file (`translation_debug.log`) for monitoring and debugging.
 - **Web GUI Suggestion**: A suggested implementation using Flask for a user-friendly web interface to upload and translate documents.
 
@@ -48,14 +51,14 @@ Speed depends on doc size and number of paragraphs. Running with Nvidia Titan-X 
   - `langdetect`
   - `flask` (for the web GUI)
   - `werkzeug` (for file handling in Flask)
-- **Ollama API Access**: An API token for authenticating requests to the Ollama API.
+- **Ollama**: Installed and running locally or on a remote server.
 
 ## Installation
 
 1. **Clone the Repository**
 
    ```bash
-   git clone https://github.com/codefitz/TransDocs.git
+   git clone https://github.com/sasakocic/TransDocs.git
    cd TransDocs
    ```
 
@@ -72,6 +75,13 @@ Speed depends on doc size and number of paragraphs. Running with Nvidia Titan-X 
    pip install python-docx requests langdetect flask werkzeug
    ```
 
+4. **Install Ollama and Load a Model**
+
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama pull llama3.2  # or any other model you prefer
+   ```
+
 ## Usage
 
 ### Command-Line Interface
@@ -84,8 +94,9 @@ The script `transdoc.py` can be executed from the command line to translate docu
 - `-o`, `--output_file` (required): Path to save the translated Word document.
 - `-t`, `--target_lang` (required): Target language code (e.g., `en`, `de`, `fr`).
 - `-k`, `--api_token` (required): Your Ollama API token for authentication.
-- `-m`, `--model`: Model name to use for translation (e.g `llama3.2`).
+- `-m`, `--model`: Model name to use for translation (default: `llama3.2`).
 - `-s`, `--src_lang`: Source language code (if not provided, the script will attempt to detect it).
+- `--api_url`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/generate`.
 
 #### Examples
 
@@ -108,10 +119,18 @@ The script `transdoc.py` can be executed from the command line to translate docu
 3. **Translate Using a Specific Model**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en -k your_api_token -m custom_model
+   python transdoc.py -i input.docx -o output.docx -t en -k your_api_token -m llama3.2:latest
    ```
 
-   This command uses `custom_model` instead of the default `llama3.2` for translation.
+   This command uses `llama3.2:latest` instead of the default model for translation.
+
+4. **Translate Using a Remote Ollama Instance**
+
+   ```bash
+   python transdoc.py -i input.docx -o output.docx -t de -k your_api_token --api_url http://192.168.1.50:11434/
+   ```
+
+   This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/generate`.
 
 #### Running the Script
 
@@ -129,6 +148,15 @@ The script `transdoc.py` can be executed from the command line to translate docu
 
    Replace `[arguments]` with the appropriate command-line arguments as shown in the examples.
 
+### Quick Test
+
+To test the installation, create a sample document:
+
+```bash
+python create_test_doc.py
+python transdoc.py --input_file ./test_document.docx --output_file output.docx --src_lang en --target_lang de -k your_api_token --model llama3.2
+```
+
 ## Web GUI Implementation (Untested)
 
 A web-based interface can enhance usability by allowing users to upload documents and receive translations without using the command line. Below is a suggested implementation using Flask.
@@ -140,6 +168,14 @@ A web-based interface can enhance usability by allowing users to upload document
    ```bash
    pip install flask werkzeug
    ```
+
+2. **Create `app.py`** (example implementation needed)
+
+```python
+from flask import Flask, render_template, request, send_file
+import os
+# Add your Flask app logic here
+```
 
 ### Running the Web App
 
@@ -200,11 +236,16 @@ console_handler.setLevel(logging.INFO)  # Change DEBUG to INFO
   - **Invalid API Token**: Ensure your API token is valid.
   - **Network Issues**: Check your internet connection.
   - **API Endpoint**: Verify that the API URL in the script is correct and accessible.
+  - **Model Not Found**: Ensure the model you specified is loaded in Ollama (`ollama list`).
 
 - **Output File Not Created**
 
   - **Permissions**: Ensure you have write permissions for the output directory.
   - **Exceptions**: Check `translation_debug.log` for any exceptions that may have occurred during processing.
+
+- **Slow Performance (CPU-only)**
+
+  - This is expected on CPU-only systems. Consider using a GPU-accelerated Ollama instance or smaller models for faster results.
 
 - **Web App Issues**
 
