@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-03-21
+
+### Added
+- **Proofreading mode**: Automatic proofreading when source == target language, or force with `--proofread` flag
+- **Optional API token**: Works without authentication for local Ollama instances
+- New argument aliases: `-i/--input`, `-o/--output`, `-s/--source`, `-t/--target`, `-u/--url`
+
+### Changed
+- Renamed CLI arguments to more standard names (`--api-url` → `--url`)
+- API token is now optional (previously required)
+- Improved help text and argument descriptions
+
 ## [1.1.0] - 2026-03-21
 
 ### Added

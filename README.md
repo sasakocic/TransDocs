@@ -1,6 +1,6 @@
 # TransDocs
 
-This project provides a Python script and an untested web GUI for translating Microsoft Word documents (`.docx` files) from one language to another using the Ollama API. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
+This project provides a Python script for translating or proofreading Microsoft Word documents (`.docx` files) using the Ollama API. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
 
 This script is currently not for Production scale workloads but can be used for personal translation tasks.
 
@@ -8,6 +8,7 @@ You need [Ollama](https://github.com/ollama/ollama) installed and running. The s
 
 - Default Ollama API URL: `http://localhost:11434` (base URL, `/api/generate` is auto-appended)
 - Works with any model loaded in your Ollama instance
+- **API token is optional** - works without authentication for local instances
 
 Speed depends on doc size, number of paragraphs, and hardware. On CPU-only systems, expect slower performance (potentially minutes per page). GPU acceleration significantly improves speed.
 
@@ -34,13 +35,15 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 ## Features
 
 - **Automatic Source Language Detection**: Detects the source language by analyzing at least 50 words from the document.
-- **Manual Source Language Specification**: Option to manually specify the source language using the `-s` or `--src_lang` argument.
+- **Manual Source Language Specification**: Option to manually specify the source language using the `-s` or `--source` argument.
 - **Translation of All Document Elements**: Translates paragraphs, tables, headers, and footers within the document.
 - **Professional Translation Quality**: Enhanced prompts for DeepL-like quality translations that preserve technical content.
+- **Automatic Proofreading Mode**: When source == target language, automatically runs in proofreading mode to fix grammar/spelling.
+- **Explicit Proofreading Flag**: Use `--proofread` to force proofreading regardless of language match.
 - **Flexible API Configuration**: Accepts base URL and automatically appends `/api/generate`.
 - **CPU Support**: Works on CPU-only systems (no GPU required).
+- **Optional Authentication**: API token is optional for local Ollama instances without authentication requirements.
 - **Detailed Logging**: Provides comprehensive logs to both console and file (`translation_debug.log`) for monitoring and debugging.
-- **Web GUI Suggestion**: A suggested implementation using Flask for a user-friendly web interface to upload and translate documents.
 
 ## Requirements
 
@@ -86,51 +89,68 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 
 ### Command-Line Interface
 
-The script `transdoc.py` can be executed from the command line to translate documents.
+The script `transdoc.py` can be executed from the command line to translate or proofread documents.
 
 #### Arguments
 
-- `-i`, `--input_file` (required): Path to the input Word document.
-- `-o`, `--output_file` (required): Path to save the translated Word document.
-- `-t`, `--target_lang` (required): Target language code (e.g., `en`, `de`, `fr`).
-- `-k`, `--api_token` (required): Your Ollama API token for authentication.
-- `-m`, `--model`: Model name to use for translation (default: `llama3.2`).
-- `-s`, `--src_lang`: Source language code (if not provided, the script will attempt to detect it).
-- `--api_url`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/generate`.
+- `-i`, `--input FILE` (required): Path to the input Word document file.
+- `-o`, `--output FILE` (required): Path to save the output Word document file.
+- `-t`, `--target LANG` (required): Target language code (e.g., `en`, `de`, `fr`). Use same as source for proofreading mode.
+- `-k`, `--api-token TOKEN`: API token for Ollama authentication (**optional**).
+- `-m`, `--model MODEL`: Model name to use for translation/proofreading (default: `llama3.2`).
+- `-s`, `--source LANG`: Source language code (e.g., `en`, `de`, `fr`). Auto-detected if not provided. Use same as target for proofreading mode.
+- `--proofread`: Force proofreading mode regardless of language match.
+- `-u`, `--url URL`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/generate`.
 
 #### Examples
 
 1. **Translate a Document with Automatic Source Language Detection**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en -k your_api_token
+   python transdoc.py -i input.docx -o output.docx -t en
    ```
 
-   This command translates `input.docx` to English, saving the result as `output.docx`. The script will detect the source language automatically.
+   This command translates `input.docx` to English, saving the result as `output.docx`. The script will detect the source language automatically. No API token required for local Ollama without authentication.
 
 2. **Translate a Document with Specified Source Language**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en -k your_api_token -s fr
+   python transdoc.py -i input.docx -o output.docx -t en -s fr
    ```
 
    This command translates `input.docx` from French to English.
 
-3. **Translate Using a Specific Model**
+3. **Translate Using a Specific Model and API Token**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t en -k your_api_token -m llama3.2:latest
+   python transdoc.py -i input.docx -o output.docx -t de -m llama3.2:latest -k your_api_token
    ```
 
-   This command uses `llama3.2:latest` instead of the default model for translation.
+   This command uses `llama3.2:latest` for translation to German with an API token.
 
 4. **Translate Using a Remote Ollama Instance**
 
    ```bash
-   python transdoc.py -i input.docx -o output.docx -t de -k your_api_token --api_url http://192.168.1.50:11434/
+   python transdoc.py -i input.docx -o output.docx -t de -u http://192.168.1.50:11434/
    ```
 
    This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/generate`.
+
+5. **Proofread a Document (Same Language)**
+
+   ```bash
+   python transdoc.py -i document.docx -o corrected.docx -s en -t en
+   ```
+
+   When source and target languages are the same, the script automatically runs in proofreading mode to fix grammar, spelling, and clarity issues.
+
+6. **Force Proofreading Mode**
+
+   ```bash
+   python transdoc.py -i document.docx -o corrected.docx -s en -t de --proofread
+   ```
+
+   The `--proofread` flag forces proofreading mode even when source and target languages differ.
 
 #### Running the Script
 
@@ -154,7 +174,7 @@ To test the installation, create a sample document:
 
 ```bash
 python create_test_doc.py
-python transdoc.py --input_file ./test_document.docx --output_file output.docx --src_lang en --target_lang de -k your_api_token --model llama3.2
+python transdoc.py -i test_document.docx -o output.docx -s en -t de -m llama3.2
 ```
 
 ## Web GUI Implementation (Untested)
@@ -195,7 +215,7 @@ import os
    - **Source Language**: Optionally enter the source language code.
    - **Target Language**: Enter the target language code.
    - **Model**: Optionally specify a different model.
-   - **API Token**: Enter your Ollama API token.
+   - **API Token**: Enter your Ollama API token (optional).
    - **Translate**: Click the "Translate" button to start the translation process.
 
 4. **Download the Translated Document**
@@ -224,7 +244,7 @@ console_handler.setLevel(logging.INFO)  # Change DEBUG to INFO
   - **Check Logging Output**: Ensure that the logging level is set to `DEBUG` to capture all messages.
   - **Verify File Paths**: Ensure that the input file path is correct and the file exists.
   - **Check Dependencies**: Ensure all required Python packages are installed.
-  - **API Token**: Verify that your Ollama API token is correct and has the necessary permissions.
+  - **API Token**: If using a remote Ollama instance, verify that your API token is correct and has the necessary permissions.
 
 - **Language Detection Fails**
 
@@ -233,8 +253,8 @@ console_handler.setLevel(logging.INFO)  # Change DEBUG to INFO
 
 - **API Errors**
 
-  - **Invalid API Token**: Ensure your API token is valid.
-  - **Network Issues**: Check your internet connection.
+  - **Invalid API Token**: Ensure your API token is valid (if required by your Ollama instance).
+  - **Network Issues**: Check your internet connection and firewall settings.
   - **API Endpoint**: Verify that the API URL in the script is correct and accessible.
   - **Model Not Found**: Ensure the model you specified is loaded in Ollama (`ollama list`).
 
