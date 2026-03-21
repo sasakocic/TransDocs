@@ -34,15 +34,16 @@ class ColorFormatter(logging.Formatter):
         return super().format(record)
 
 
-# Logging configuration
+# Logging configuration - FULL DEBUG on console!
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 file_handler = logging.FileHandler("translation_debug.log", "w", encoding="utf-8")
 console_handler = logging.StreamHandler()
 
+# BOTH handlers at DEBUG level for complete logs
 file_handler.setLevel(logging.DEBUG)
-console_handler.setLevel(logging.INFO)  # Output to console
+console_handler.setLevel(logging.DEBUG)
 
 # Use colorful formatter for console, plain text for file
 console_formatter = ColorFormatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -106,7 +107,12 @@ Rules:
 
 Text: {text}"""
 
-    payload = {"model": model, "prompt": prompt, "stream": False}
+    # Use /api/chat endpoint (modern Ollama API)
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
 
     headers = {"Content-Type": "application/json"}
 
@@ -115,15 +121,45 @@ Text: {text}"""
         headers["Authorization"] = f"Bearer {api_token}"
 
     try:
-        logger.debug(f"Sending API request with payload: {payload}")
+        # Extract just the endpoint path for logging
+        import urllib.parse
+
+        parsed_url = urllib.parse.urlparse(api_url)
+        endpoint_path = parsed_url.path if parsed_url.path else "/"
+
+        logger.debug(f"=== OLLAMA API CALL DEBUG ===")
+        logger.debug(f"Full URL: {api_url}")
+        logger.debug(f"Endpoint path: {endpoint_path}")
+        logger.debug(f"Model: {model}")
+        logger.debug(f"Messages count: {len(payload.get('messages', []))}")
+        logger.debug(
+            f"Prompt preview (first 200 chars): {payload.get('messages', [{}])[0].get('content', '')[:200]}"
+        )
+        logger.debug(f"Request headers: {headers}")
+        logger.debug(f"HTTP method being used: POST")
+
         response = requests.post(api_url, json=payload, headers=headers)
-        logger.debug(f"Received response with status code {response.status_code}")
+        logger.debug(f"Response status code: {response.status_code}")
+        logger.debug(f"Response headers: {dict(response.headers)}")
+        logger.debug(f"Response body (raw): {response.text[:500]}")
+
+        # Log full response if error to help debug
+        if response.status_code != 200:
+            logger.error(f"Full response text: {response.text}")
+
         if response.status_code == 200:
             response_json = response.json()
             logger.debug(f"API response JSON: {response_json}")
-            result_text = response_json.get("response", "").strip()
+
+            # Extract response text - handle both /api/chat and /api/generate responses
+            result_text = ""
+            if "response" in response_json:
+                result_text = response_json["response"]
+            elif "message" in response_json and "content" in response_json["message"]:
+                result_text = response_json["message"]["content"]
+
             logger.debug(f"{mode.capitalize()} text: {result_text}")
-            return result_text
+            return result_text.strip() if result_text else ""
         else:
             logger.error(f"API request failed with status code {response.status_code}")
             logger.error(f"Response: {response.text}")
@@ -149,7 +185,7 @@ def translate_or_proofread(
     elif src_lang == target_lang:
         mode = "proofread"
         logger.info(
-            f"Source and target languages are the same ({src_lang}). Running proofreading mode."
+            f"Source and target languages are the same ({src_lang}). Running in proofreading mode."
         )
     else:
         mode = "translate"
@@ -196,7 +232,7 @@ def process_document(
     target_lang,
     api_token,
     src_lang=None,
-    api_url="http://localhost:11434/api/generate",
+    api_url="http://localhost:11434",
     force_proofread=False,
 ):
     try:
@@ -349,13 +385,13 @@ def main():
         default="http://localhost:11434",
         dest="api_url",
         metavar="URL",
-        help="Ollama API base URL (default: http://localhost:11434)",
+        help="Ollama API base URL (default: http://localhost:11434). Auto-appends /api/chat.",
     )
     args = parser.parse_args()
 
-    # Ensure the API URL ends with /api/generate
-    if not args.api_url.endswith("/api/generate"):
-        api_url = f"{args.api_url.rstrip('/')}/api/generate"
+    # Auto-append /api/chat endpoint (modern Ollama API)
+    if not args.api_url.endswith(("/api/generate", "/api/chat")):
+        api_url = f"{args.api_url.rstrip('/')}/api/chat"
     else:
         api_url = args.api_url
 

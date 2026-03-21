@@ -1,36 +1,245 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
- <meta charset="UTF-8">
- <title>Document Translator</title>
- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    <meta charset="UTF-8">
+    <title>Document Translator - TransDocs</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
 </head>
 <body>
-<div class="container">
- <h1 class="mt-5">Translate Your Document</h1>
- <form method="post" enctype="multipart/form-data">
- <div class="form-group">
- <label for="input_file">Upload Document:</label>
- <input type="file" class="form-control-file" id="input_file" name="input_file" required>
- </div>
- <div class="form-group">
- <label for="src_lang">Source Language (optional):</label>
- <input type="text" class="form-control" id="src_lang" name="src_lang" placeholder="e.g., en, de, fr">
- </div>
- <div class="form-group">
- <label for="target_lang">Target Language:</label>
- <input type="text" class="form-control" id="target_lang" name="target_lang" required placeholder="e.g., en, de, fr">
- </div>
- <div class="form-group">
- <label for="model">Model (optional):</label>
- <input type="text" class="form-control" id="model" name="model" placeholder="Default is llama3.2">
- </div>
- <div class="form-group">
- <label for="api_token">API Token:</label>
- <input type="password" class="form-control" id="api_token" name="api_token" required>
- </div>
- <button type="submit" class="btn btn-primary">Translate</button>
- </form>
+<div class="container mt-5">
+    <h1 class="mb-4">Translate Your Document</h1>
+    
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <!-- Ollama API Configuration (First!) -->
+    <hr class="my-4">
+    
+    <h5>Ollama API Settings</h5>
+    <form id="testForm" onsubmit="return testConnection(event)">
+        <div class="form-row">
+            <div class="col-md-10 form-group">
+                <label for="api_url">Ollama API URL:</label>
+                <input type="text" class="form-control" id="api_url" name="api_url" 
+                       placeholder="http://localhost:11434" value="http://localhost:11434">
+            </div>
+            <div class="col-md-2 form-group">
+                <label>&nbsp;</label><br>
+                <button type="submit" name="action" value="query" class="btn btn-secondary w-100">Query</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Connection Status (Inline) -->
+    <div id="connectionStatus"></div>
+
+    <!-- Available Models Dropdown (Populated by Query) -->
+    {% if available_models %}
+    <div class="alert alert-success mt-2">
+        ✓ Connected! Available models: {{ available_models }}
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+        <label for="model">Model:</label>
+        <select id="model" name="model" class="form-control" required>
+            <option value="">Select a model (or query first)...</option>
+            {% if available_models %}
+                {% for model in available_models.split(', ') %}
+                <option value="{{ model }}">{{ model }}</option>
+                {% endfor %}
+            {% else %}
+                <option value="llama3.2">llama3.2 (default)</option>
+                <option value="llama3.1">llama3.1</option>
+                <option value="llama3">llama3</option>
+                <option value="mistral">mistral</option>
+                <option value="gemma2">gemma2</option>
+            {% endif %}
+        </select>
+    </div>
+
+    <!-- Document Translation Form -->
+    <form method="post" enctype="multipart/form-data" id="translationForm">
+        <input type="hidden" name="api_url" id="url_input" value="http://localhost:11434">
+        
+        <hr class="my-4">
+        
+        <h5>Document Translation</h5>
+
+        <div class="form-group">
+            <label for="input_file">Upload Document (.docx):</label>
+            <input type="file" class="form-control-file" id="input_file" name="input_file" accept=".docx" required>
+        </div>
+
+        <div class="form-row">
+            <div class="col-md-6 form-group">
+                <label for="src_lang">Source Language (optional):</label>
+                <select id="src_lang" name="src_lang" class="form-control">
+                    <option value="">Auto-detect from document</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                    <option value="fr">French</option>
+                    <option value="es">Spanish</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="nl">Dutch</option>
+                    <option value="pl">Polish</option>
+                    <option value="ru">Russian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="zh">Chinese (Simplified)</option>
+                    <option value="zh-TW">Chinese (Traditional)</option>
+                    <option value="ko">Korean</option>
+                    <option value="ar">Arabic</option>
+                    <option value="hi">Hindi</option>
+                    <option value="tr">Turkish</option>
+                    <option value="sv">Swedish</option>
+                    <option value="da">Danish</option>
+                    <option value="no">Norwegian</option>
+                    <option value="fi">Finnish</option>
+                    <option value="el">Greek</option>
+                    <option value="he">Hebrew</option>
+                    <option value="th">Thai</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="id">Indonesian</option>
+                    <option value="ms">Malay</option>
+                    <option value="cs">Czech</option>
+                    <option value="hu">Hungarian</option>
+                    <option value="ro">Romanian</option>
+                    <option value="uk">Ukrainian</option>
+                    <!-- Balkan Languages -->
+                    <option value="sr">Serbian (Latin)</option>
+                    <option value="sr-Cyrl">Serbian (Cyrillic)</option>
+                    <option value="hr">Croatian</option>
+                    <option value="bs">Bosnian</option>
+                    <option value="sl">Slovenian</option>
+                    <option value="mk">Macedonian</option>
+                    <option value="sq">Albanian</option>
+                </select>
+            </div>
+
+            <div class="col-md-6 form-group">
+                <label for="target_lang">Target Language:</label>
+                <select id="target_lang" name="target_lang" class="form-control" required>
+                    <option value="">Select target language...</option>
+                    <option value="en">English</option>
+                    <option value="de">German</option>
+                    <option value="fr">French</option>
+                    <option value="es">Spanish</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="nl">Dutch</option>
+                    <option value="pl">Polish</option>
+                    <option value="ru">Russian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="zh">Chinese (Simplified)</option>
+                    <option value="zh-TW">Chinese (Traditional)</option>
+                    <option value="ko">Korean</option>
+                    <option value="ar">Arabic</option>
+                    <option value="hi">Hindi</option>
+                    <option value="tr">Turkish</option>
+                    <option value="sv">Swedish</option>
+                    <option value="da">Danish</option>
+                    <option value="no">Norwegian</option>
+                    <option value="fi">Finnish</option>
+                    <option value="el">Greek</option>
+                    <option value="he">Hebrew</option>
+                    <option value="th">Thai</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="id">Indonesian</option>
+                    <option value="ms">Malay</option>
+                    <option value="cs">Czech</option>
+                    <option value="hu">Hungarian</option>
+                    <option value="ro">Romanian</option>
+                    <option value="uk">Ukrainian</option>
+                    <!-- Balkan Languages -->
+                    <option value="sr">Serbian (Latin)</option>
+                    <option value="sr-Cyrl">Serbian (Cyrillic)</option>
+                    <option value="hr">Croatian</option>
+                    <option value="bs">Bosnian</option>
+                    <option value="sl">Slovenian</option>
+                    <option value="mk">Macedonian</option>
+                    <option value="sq">Albanian</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="col-md-6 form-group">
+                <label for="api_token">API Token (optional):</label>
+                <input type="password" class="form-control" id="api_token" name="api_token" placeholder="Leave empty for local Ollama">
+                <small class="form-text text-muted">Required only if your Ollama instance requires authentication</small>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg mt-3">Translate Document</button>
+    </form>
+
+    <hr class="my-4">
+
+    <h5>Usage Tips:</h5>
+    <ul>
+        <li><strong>Query first:</strong> Enter your Ollama API URL and click "Query" to see available models.</li>
+        <li><strong>Select model:</strong> Choose from the dropdown after querying, or use a default model.</li>
+        <li><strong>Source Language:</strong> Leave empty to auto-detect from the document content.</li>
+        <li><strong>Target Language:</strong> Select a language from the dropdown. Use same as source for proofreading mode.</li>
+    </ul>
+
+    <p class="text-muted mt-3">Powered by TransDocs & Ollama</p>
 </div>
+
+<script>
+function testConnection(event) {
+    event.preventDefault();
+    
+    const url = document.getElementById('api_url').value;
+    const modelSelect = document.getElementById('model');
+    const statusDiv = document.getElementById('connectionStatus');
+    
+    // Disable button during query
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Querying...';
+
+    fetch('/query_ollama', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({api_url: url})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update model dropdown with available models
+            modelSelect.innerHTML = '<option value="">Select a model...</option>';
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
+            });
+            
+            // Show success message inline (green)
+            statusDiv.innerHTML = '<div class="alert alert-success">✓ Connected! Available models: ' + data.models.join(', ') + '</div>';
+        } else {
+            // Show error
+            statusDiv.innerHTML = '<div class="alert alert-danger">✗ Connection failed!<br>Error: ' + data.error + '</div>';
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = '<div class="alert alert-danger">✗ Query failed!<br>Error: ' + error.message + '</div>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'Query';
+    });
+    
+    return false; // Prevent form submission
+}
+
+// Sync URL input with hidden field
+document.getElementById('api_url').addEventListener('input', function(e) {
+    document.getElementById('url_input').value = e.target.value;
+});
+</script>
 </body>
 </html>
