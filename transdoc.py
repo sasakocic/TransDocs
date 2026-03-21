@@ -49,9 +49,7 @@ def detect_source_language(doc, min_words=50):
         logger.error(f"Language detection failed: {e}")
         return None
 
-def call_ollama_api(text, src_lang, target_lang, model, api_token):
-    api_url = 'http://localhost:11434/api/generate'
-
+def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url):
     prompt = f"""You are a professional translator like DeepL. Translate ONLY the text content from {src_lang} to {target_lang}.
 
 Rules:
@@ -90,7 +88,7 @@ Text: {text}"""
         logger.exception(f"An error occurred while calling the Ollama API: {e}")
         return text
 
-def translate_text(text, src_lang, target_lang, model, api_token):
+def translate_text(text, src_lang, target_lang, model, api_token, api_url):
     logger.debug(f"Text to translate: '{text}'")
 
     if not text or not text.strip():
@@ -101,15 +99,15 @@ def translate_text(text, src_lang, target_lang, model, api_token):
         logger.info(f"Source language and target language are the same for '{text}'. No translation needed.")
         return text
 
-    translated_text = call_ollama_api(text, src_lang, target_lang, model, api_token)
+    translated_text = call_ollama_api(text, src_lang, target_lang, model, api_token, api_url)
     return translated_text
 
-def process_paragraph(para, src_lang, model, target_lang, api_token):
+def process_paragraph(para, src_lang, model, target_lang, api_token, api_url):
     try:
         paragraph_text = ''.join(run.text for run in para.runs)
         logger.debug(f"Original paragraph text: '{paragraph_text}'")
         if paragraph_text.strip():
-            translated_text = translate_text(paragraph_text, src_lang, target_lang, model, api_token)
+            translated_text = translate_text(paragraph_text, src_lang, target_lang, model, api_token, api_url)
             # Clear existing runs
             for run in para.runs:
                 run.text = ''
@@ -121,7 +119,7 @@ def process_paragraph(para, src_lang, model, target_lang, api_token):
     except Exception as e:
         logger.exception(f"An error occurred while processing paragraph: {e}")
 
-def process_document(input_file, output_file, model, target_lang, api_token, src_lang=None):
+def process_document(input_file, output_file, model, target_lang, api_token, src_lang=None, api_url='http://localhost:11434/api/generate'):
     try:
         logger.info(f"Opening document '{input_file}'")
         doc = Document(input_file)
@@ -138,23 +136,23 @@ def process_document(input_file, output_file, model, target_lang, api_token, src
 
         logger.info("Processing main document paragraphs")
         for para in doc.paragraphs:
-            process_paragraph(para, src_lang, model, target_lang, api_token)
+            process_paragraph(para, src_lang, model, target_lang, api_token, api_url)
 
         logger.info("Processing tables in the document")
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for para in cell.paragraphs:
-                        process_paragraph(para, src_lang, model, target_lang, api_token)
+                        process_paragraph(para, src_lang, model, target_lang, api_token, api_url)
 
         logger.info("Processing headers and footers")
         for section in doc.sections:
             header = section.header
             footer = section.footer
             for para in header.paragraphs:
-                process_paragraph(para, src_lang, model, target_lang, api_token)
+                process_paragraph(para, src_lang, model, target_lang, api_token, api_url)
             for para in footer.paragraphs:
-                process_paragraph(para, src_lang, model, target_lang, api_token)
+                process_paragraph(para, src_lang, model, target_lang, api_token, api_url)
 
         doc.save(output_file)
         logger.info(f"Document saved to '{output_file}'")
@@ -169,10 +167,17 @@ def main():
     parser.add_argument('-t', '--target_lang', type=str, required=True, help='The target language for translation (e.g., en, de, fr).')
     parser.add_argument('-k', '--api_token', type=str, required=True, help='Your API token for authentication.')
     parser.add_argument('-s', '--src_lang', type=str, help='The source language (e.g., en, de, fr). If not provided, the script will attempt to detect it.')
+    parser.add_argument('--api_url', type=str, default='http://localhost:11434', help='Ollama API base URL (default: http://localhost:11434)')
     args = parser.parse_args()
 
-    logger.info("Starting translation process")
-    process_document(args.input_file, args.output_file, args.model, args.target_lang, args.api_token, args.src_lang)
+    # Ensure the API URL ends with /api/generate
+    if not args.api_url.endswith('/api/generate'):
+        api_url = f"{args.api_url.rstrip('/')}/api/generate"
+    else:
+        api_url = args.api_url
+
+    logger.info(f"Starting translation process with API URL: {api_url}")
+    process_document(args.input_file, args.output_file, args.model, args.target_lang, args.api_token, args.src_lang, api_url)
     logger.info("Translation process completed")
 
 if __name__ == "__main__":
