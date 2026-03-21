@@ -189,13 +189,13 @@ def process_document(input_file, output_file, model, target_lang, api_token, src
 def main():
     parser = argparse.ArgumentParser(description='Translate or proofread a Word document using the Ollama API.')
     parser.add_argument('-m', '--model', type=str, default='llama3.2', help='The model name to use for translation/proofreading.')
-    parser.add_argument('-i', '--input_file', type=str, required=True, help='The input Word document file path.')
-    parser.add_argument('-o', '--output_file', type=str, required=True, help='The output Word document file path.')
-    parser.add_argument('-t', '--target_lang', type=str, required=True, help='The target language for translation (e.g., en, de, fr). Use same as source for proofreading mode.')
-    parser.add_argument('-k', '--api_token', type=str, required=True, help='Your API token for authentication.')
-    parser.add_argument('-s', '--src_lang', type=str, help='The source language (e.g., en, de, fr). If not provided, the script will attempt to detect it. Use same as target_lang for proofreading mode.')
-    parser.add_argument('--proofread', action='store_true', help='Force proofreading mode even when source and target languages differ.')
-    parser.add_argument('--api_url', type=str, default='http://localhost:11434', help='Ollama API base URL (default: http://localhost:11434)')
+    parser.add_argument('-i', '--input', type=str, required=True, dest='input_file', metavar='FILE', help='Path to the input Word document file.')
+    parser.add_argument('-o', '--output', type=str, required=True, dest='output_file', metavar='FILE', help='Path to save the output Word document file.')
+    parser.add_argument('-t', '--target-lang', type=str, required=True, dest='target_lang', metavar='LANG', help='Target language code (e.g., en, de, fr). Use same as source for proofreading mode.')
+    parser.add_argument('-k', '--api-token', type=str, required=True, dest='api_token', metavar='TOKEN', help='API token for Ollama authentication.')
+    parser.add_argument('-s', '--src-lang', type=str, default=None, dest='src_lang', metavar='LANG', help='Source language code (e.g., en, de, fr). Auto-detected if not provided. Use same as target for proofreading mode.')
+    parser.add_argument('--proofread', action='store_true', help='Force proofreading mode regardless of language match.')
+    parser.add_argument('--api-url', type=str, default='http://localhost:11434', dest='api_url', metavar='URL', help='Ollama API base URL (default: http://localhost:11434)')
     args = parser.parse_args()
 
     # Ensure the API URL ends with /api/generate
