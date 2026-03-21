@@ -49,8 +49,20 @@ def detect_source_language(doc, min_words=50):
         logger.error(f"Language detection failed: {e}")
         return None
 
-def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url):
-    prompt = f"""You are a professional translator like DeepL. Translate ONLY the text content from {src_lang} to {target_lang}.
+def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode='translate'):
+    if mode == 'proofread':
+        prompt = f"""You are a professional proofreader and editor. Review the following text in {src_lang} for grammar, spelling, punctuation, clarity, and style improvements.
+
+Rules:
+- Keep math formulas (e.g., LaTeX, equations), code, symbols, URLs, numbers, dates, proper names unchanged.
+- Preserve the original meaning while improving fluency, readability, and correctness.
+- Fix grammatical errors, typos, and awkward phrasing.
+- Maintain formatting, lists, emphasis, and document structure.
+- Output ONLY the improved text—no explanations, comments, or notes about changes made.
+
+Text: {text}"""
+    else:  # translate mode
+        prompt = f"""You are a professional translator like DeepL. Translate ONLY the text content from {src_lang} to {target_lang}.
 
 Rules:
 - Keep math formulas (e.g., LaTeX, equations), code, symbols, URLs, numbers, dates, proper names unchanged.
@@ -77,9 +89,9 @@ Text: {text}"""
         if response.status_code == 200:
             response_json = response.json()
             logger.debug(f"API response JSON: {response_json}")
-            translated_text = response_json.get('response', '').strip()
-            logger.debug(f"Translated text: {translated_text}")
-            return translated_text
+            result_text = response_json.get('response', '').strip()
+            logger.debug(f"{mode.capitalize()} text: {result_text}")
+            return result_text
         else:
             logger.error(f"API request failed with status code {response.status_code}")
             logger.error(f"Response: {response.text}")
@@ -88,32 +100,35 @@ Text: {text}"""
         logger.exception(f"An error occurred while calling the Ollama API: {e}")
         return text
 
-def translate_text(text, src_lang, target_lang, model, api_token, api_url):
-    logger.debug(f"Text to translate: '{text}'")
+def translate_or_proofread(text, src_lang, target_lang, model, api_token, api_url):
+    logger.debug(f"Text to process: '{text}'")
 
     if not text or not text.strip():
         logger.warning(f"Text is empty or whitespace: '{text}'")
         return text
 
     if src_lang == target_lang:
-        logger.info(f"Source language and target language are the same for '{text}'. No translation needed.")
-        return text
+        mode = 'proofread'
+        logger.info(f"Source and target languages are the same ({src_lang}). Running proofreading mode.")
+    else:
+        mode = 'translate'
+        logger.info(f"Translating from {src_lang} to {target_lang}.")
 
-    translated_text = call_ollama_api(text, src_lang, target_lang, model, api_token, api_url)
-    return translated_text
+    result_text = call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode=mode)
+    return result_text
 
 def process_paragraph(para, src_lang, model, target_lang, api_token, api_url):
     try:
         paragraph_text = ''.join(run.text for run in para.runs)
         logger.debug(f"Original paragraph text: '{paragraph_text}'")
         if paragraph_text.strip():
-            translated_text = translate_text(paragraph_text, src_lang, target_lang, model, api_token, api_url)
+            result_text = translate_or_proofread(paragraph_text, src_lang, target_lang, model, api_token, api_url)
             # Clear existing runs
             for run in para.runs:
                 run.text = ''
-            # Add a new run with the translated text
-            para.add_run(translated_text)
-            logger.debug(f"Translated paragraph text: '{translated_text}'")
+            # Add a new run with the processed text
+            para.add_run(result_text)
+            logger.debug(f"Processed paragraph text: '{result_text}'")
         else:
             logger.debug("Paragraph is empty or whitespace.")
     except Exception as e:
@@ -133,6 +148,12 @@ def process_document(input_file, output_file, model, target_lang, api_token, src
             if not src_lang:
                 logger.error("Source language detection failed. Exiting.")
                 return
+
+        # Check if we need proofreading or translation
+        if src_lang == target_lang:
+            logger.info(f"Source ({src_lang}) equals target ({target_lang}). Running in PROOFREADING mode.")
+        else:
+            logger.info(f"Translating from {src_lang} to {target_lang}.")
 
         logger.info("Processing main document paragraphs")
         for para in doc.paragraphs:
@@ -160,13 +181,13 @@ def process_document(input_file, output_file, model, target_lang, api_token, src
         logger.exception(f"An error occurred while processing the document: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Translate a Word document using the Ollama API.')
-    parser.add_argument('-m', '--model', type=str, default='llama3.2', help='The model name to use for translation.')
+    parser = argparse.ArgumentParser(description='Translate or proofread a Word document using the Ollama API.')
+    parser.add_argument('-m', '--model', type=str, default='llama3.2', help='The model name to use for translation/proofreading.')
     parser.add_argument('-i', '--input_file', type=str, required=True, help='The input Word document file path.')
     parser.add_argument('-o', '--output_file', type=str, required=True, help='The output Word document file path.')
-    parser.add_argument('-t', '--target_lang', type=str, required=True, help='The target language for translation (e.g., en, de, fr).')
+    parser.add_argument('-t', '--target_lang', type=str, required=True, help='The target language for translation (e.g., en, de, fr). Use same as source for proofreading.')
     parser.add_argument('-k', '--api_token', type=str, required=True, help='Your API token for authentication.')
-    parser.add_argument('-s', '--src_lang', type=str, help='The source language (e.g., en, de, fr). If not provided, the script will attempt to detect it.')
+    parser.add_argument('-s', '--src_lang', type=str, help='The source language (e.g., en, de, fr). If not provided, the script will attempt to detect it. Use same as target_lang for proofreading mode.')
     parser.add_argument('--api_url', type=str, default='http://localhost:11434', help='Ollama API base URL (default: http://localhost:11434)')
     args = parser.parse_args()
 
@@ -176,9 +197,9 @@ def main():
     else:
         api_url = args.api_url
 
-    logger.info(f"Starting translation process with API URL: {api_url}")
+    logger.info(f"Starting processing with API URL: {api_url}")
     process_document(args.input_file, args.output_file, args.model, args.target_lang, args.api_token, args.src_lang, api_url)
-    logger.info("Translation process completed")
+    logger.info("Processing completed")
 
 if __name__ == "__main__":
     main()
