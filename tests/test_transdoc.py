@@ -1,6 +1,7 @@
 """
 Unit tests for TransDocs - Document Translation and Proofreading Tool.
 """
+
 import unittest
 from unittest.mock import Mock, patch
 import sys
@@ -70,7 +71,9 @@ class TestTransDoc(unittest.TestCase):
 
     @patch("transdoc.detect")
     @patch("transdoc.Document")
-    def test_detect_source_language_insufficient_text(self, mock_doc_class, mock_detect):
+    def test_detect_source_language_insufficient_text(
+        self, mock_doc_class, mock_detect
+    ):
         """Test language detection with insufficient text."""
         # Mock document with very little text - paragraph needs runs attribute
         mock_run1 = Mock()
@@ -102,9 +105,7 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "This is the translated text."
-        }
+        mock_response.json.return_value = {"response": "This is the translated text."}
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -127,9 +128,7 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "This is the corrected text."
-        }
+        mock_response.json.return_value = {"response": "This is the corrected text."}
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -181,6 +180,9 @@ class TestTransDoc(unittest.TestCase):
 
         mock_para = Mock()
         mock_para.runs = [mock_run1]
+        mock_para.add_run = Mock(
+            side_effect=lambda text: setattr(mock_run1, "text", text) or mock_run1
+        )
 
         mock_translate.return_value = "Hallo Welt"
 
@@ -193,7 +195,7 @@ class TestTransDoc(unittest.TestCase):
             api_url="http://localhost:11434/api/generate",
         )
 
-        # Verify the paragraph text was updated - runs list should have new run
+        # Verify the paragraph text was updated - add_run should create new run with processed text
         self.assertEqual(mock_para.runs[0].text, "Hallo Welt")
 
     @patch("transdoc.translate_or_proofread")
@@ -230,9 +232,7 @@ class TestCLIArguments(unittest.TestCase):
         parser.add_argument("-t", "--target", type=str, required=True)
 
         # Should not raise when all required args provided
-        args = parser.parse_args(
-            ["-i", "test.docx", "-o", "out.docx", "-t", "en"]
-        )
+        args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
         self.assertEqual(args.input, "test.docx")
 
     def test_optional_arguments(self):
