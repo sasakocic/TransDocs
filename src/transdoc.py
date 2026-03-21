@@ -125,9 +125,7 @@ Text: {text}"""
             logger.debug(f"{mode.capitalize()} text: {result_text}")
             return result_text
         else:
-            logger.error(
-                f"API request failed with status code {response.status_code}"
-            )
+            logger.error(f"API request failed with status code {response.status_code}")
             logger.error(f"Response: {response.text}")
             return text
     except Exception as e:
@@ -217,9 +215,7 @@ def process_document(
 
         # Check if we need proofreading or translation
         if force_proofread:
-            logger.info(
-                "Running in PROOFREADING mode (explicit --proofread flag)."
-            )
+            logger.info("Running in PROOFREADING mode (explicit --proofread flag).")
         elif src_lang == target_lang:
             logger.info(
                 f"Source ({src_lang}) equals target ({target_lang}). Running in PROOFREADING mode."
