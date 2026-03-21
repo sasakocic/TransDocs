@@ -1,14 +1,13 @@
 """
 Unit tests for TransDocs - Document Translation and Proofreading Tool.
 """
-
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import sys
 import os
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 
 class TestTransDoc(unittest.TestCase):
@@ -22,12 +21,18 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.Document")
     def test_detect_source_language_en(self, mock_doc_class):
         """Test source language detection for English text."""
-        # Mock document with English paragraphs
+        # Mock document with English paragraphs - each paragraph needs runs attribute
+        mock_run1 = Mock()
+        mock_run1.text = "This is a test document in English."
+
         mock_para1 = Mock()
-        mock_para1.text = "This is a test document in English."
+        mock_para1.runs = [mock_run1]
+
+        mock_run2 = Mock()
+        mock_run2.text = "It contains multiple sentences and words."
 
         mock_para2 = Mock()
-        mock_para2.text = "It contains multiple sentences and words."
+        mock_para2.runs = [mock_run2]
 
         mock_doc = Mock()
         mock_doc.paragraphs = [mock_para1, mock_para2]
@@ -41,12 +46,18 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.Document")
     def test_detect_source_language_de(self, mock_doc_class):
         """Test source language detection for German text."""
-        # Mock document with German paragraphs
+        # Mock document with German paragraphs - each paragraph needs runs attribute
+        mock_run1 = Mock()
+        mock_run1.text = "Dies ist ein Testdokument auf Deutsch."
+
         mock_para1 = Mock()
-        mock_para1.text = "Dies ist ein Testdokument auf Deutsch."
+        mock_para1.runs = [mock_run1]
+
+        mock_run2 = Mock()
+        mock_run2.text = "Es enthält mehrere Sätze und Wörter."
 
         mock_para2 = Mock()
-        mock_para2.text = "Es enthält mehrere Sätze und Wörter."
+        mock_para2.runs = [mock_run2]
 
         mock_doc = Mock()
         mock_doc.paragraphs = [mock_para1, mock_para2]
@@ -60,9 +71,12 @@ class TestTransDoc(unittest.TestCase):
     @patch("transdoc.Document")
     def test_detect_source_language_insufficient_text(self, mock_doc_class):
         """Test language detection with insufficient text."""
-        # Mock document with very little text
+        # Mock document with very little text - paragraph needs runs attribute
+        mock_run1 = Mock()
+        mock_run1.text = "Hi."
+
         mock_para1 = Mock()
-        mock_para1.text = "Hi."
+        mock_para1.runs = [mock_run1]
 
         mock_doc = Mock()
         mock_doc.paragraphs = [mock_para1]
@@ -79,7 +93,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the translated text."}
+        mock_response.json.return_value = {
+            "response": "This is the translated text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -102,7 +118,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the corrected text."}
+        mock_response.json.return_value = {
+            "response": "This is the corrected text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -148,10 +166,11 @@ class TestTransDoc(unittest.TestCase):
         """Test paragraph processing."""
         from transdoc import process_paragraph
 
-        # Mock paragraph with runs
-        mock_para = Mock()
+        # Mock paragraph with runs - need to properly set up the structure
         mock_run1 = Mock()
         mock_run1.text = "Hello world"
+
+        mock_para = Mock()
         mock_para.runs = [mock_run1]
 
         mock_translate.return_value = "Hallo Welt"
@@ -165,7 +184,7 @@ class TestTransDoc(unittest.TestCase):
             api_url="http://localhost:11434/api/generate",
         )
 
-        # Verify the paragraph text was updated
+        # Verify the paragraph text was updated - runs list should have new run
         self.assertEqual(mock_para.runs[0].text, "Hallo Welt")
 
     @patch("transdoc.translate_or_proofread")
@@ -239,7 +258,9 @@ class TestCLIArguments(unittest.TestCase):
         parser.add_argument("-t", "--target", type=str, required=True)
 
         # Should not raise when all required args provided
-        args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
+        args = parser.parse_args(
+            ["-i", "test.docx", "-o", "out.docx", "-t", "en"]
+        )
         self.assertEqual(args.input, "test.docx")
 
     def test_optional_arguments(self):
