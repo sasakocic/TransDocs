@@ -195,7 +195,7 @@ def main():
     parser.add_argument('-k', '--api-token', type=str, required=True, dest='api_token', metavar='TOKEN', help='API token for Ollama authentication.')
     parser.add_argument('-s', '--source', type=str, default=None, dest='src_lang', metavar='LANG', help='Source language code (e.g., en, de, fr). Auto-detected if not provided. Use same as target for proofreading mode.')
     parser.add_argument('--proofread', action='store_true', help='Force proofreading mode regardless of language match.')
-    parser.add_argument('--api-url', type=str, default='http://localhost:11434', dest='api_url', metavar='URL', help='Ollama API base URL (default: http://localhost:11434)')
+    parser.add_argument('-u', '--url', type=str, default='http://localhost:11434', dest='api_url', metavar='URL', help='Ollama API base URL (default: http://localhost:11434)')
     args = parser.parse_args()
 
     # Ensure the API URL ends with /api/generate
