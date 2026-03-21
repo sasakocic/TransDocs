@@ -1,7 +1,6 @@
 """
 Unit tests for TransDocs - Document Translation and Proofreading Tool.
 """
-
 import unittest
 from unittest.mock import Mock, patch
 import sys
@@ -71,9 +70,7 @@ class TestTransDoc(unittest.TestCase):
 
     @patch("transdoc.detect")
     @patch("transdoc.Document")
-    def test_detect_source_language_insufficient_text(
-        self, mock_doc_class, mock_detect
-    ):
+    def test_detect_source_language_insufficient_text(self, mock_doc_class, mock_detect):
         """Test language detection with insufficient text."""
         # Mock document with very little text - paragraph needs runs attribute
         mock_run1 = Mock()
@@ -89,7 +86,10 @@ class TestTransDoc(unittest.TestCase):
         # Make detect raise an exception for short text
         from langdetect.lang_detect_exception import LangDetectException
 
-        mock_detect.side_effect = LangDetectException("Length too short")
+        def raise_exception(text):
+            raise LangDetectException("Length too short", "sw")
+
+        mock_detect.side_effect = raise_exception
 
         from transdoc import detect_source_language
 
@@ -102,7 +102,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the translated text."}
+        mock_response.json.return_value = {
+            "response": "This is the translated text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -125,7 +127,9 @@ class TestTransDoc(unittest.TestCase):
         # Mock successful response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"response": "This is the corrected text."}
+        mock_response.json.return_value = {
+            "response": "This is the corrected text."
+        }
         mock_post.return_value = mock_response
 
         from transdoc import call_ollama_api
@@ -226,7 +230,9 @@ class TestCLIArguments(unittest.TestCase):
         parser.add_argument("-t", "--target", type=str, required=True)
 
         # Should not raise when all required args provided
-        args = parser.parse_args(["-i", "test.docx", "-o", "out.docx", "-t", "en"])
+        args = parser.parse_args(
+            ["-i", "test.docx", "-o", "out.docx", "-t", "en"]
+        )
         self.assertEqual(args.input, "test.docx")
 
     def test_optional_arguments(self):
