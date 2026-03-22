@@ -18,7 +18,7 @@ app.secret_key = "your_secret_key"
 # Configure upload folder and allowed extensions
 UPLOAD_FOLDER = "uploads/"
 OUTPUT_FOLDER = "outputs/"
-ALLOWED_EXTENSIONS = {"docx"}
+ALLOWED_EXTENSIONS = {"docx", "pdf"}
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
@@ -161,9 +161,7 @@ def build_models_endpoints(api_url, backend):
 def extract_model_names(data):
     """Extract model names from either Ollama or OpenAI-compatible responses."""
     items = data.get("data", [])
-    openai_models = [
-        m.get("id") for m in items if isinstance(m, dict) and m.get("id")
-    ]
+    openai_models = [m.get("id") for m in items if isinstance(m, dict) and m.get("id")]
     if openai_models:
         return openai_models
     items = data.get("models", [])
@@ -197,13 +195,16 @@ def query_models():
                 return jsonify({"success": True, "models": models})
             last_status = response.status_code
             last_text = response.text[:500]
-        return jsonify(
-            {
-                "success": False,
-                "error": f"HTTP {last_status}",
-                "details": last_text,
-            }
-        ), 400
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": f"HTTP {last_status}",
+                    "details": last_text,
+                }
+            ),
+            400,
+        )
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -226,12 +227,20 @@ def start_translation():
     if not target_lang:
         return jsonify({"success": False, "error": "Target language is required"}), 400
     if not file or not allowed_file(file.filename):
-        return jsonify({"success": False, "error": "Please upload a valid .docx file"}), 400
+        return (
+            jsonify(
+                {"success": False, "error": "Please upload a valid .docx or .pdf file"}
+            ),
+            400,
+        )
 
     filename = secure_filename(file.filename)
     job_id = uuid.uuid4().hex
     input_filename = f"{job_id}_{filename}"
-    output_filename = f"translated_{job_id}_{filename}"
+    input_base_name = os.path.splitext(filename)[0]
+    input_extension = os.path.splitext(filename)[1].lower()
+    output_extension = ".pdf" if input_extension == ".pdf" else ".docx"
+    output_filename = f"translated_{job_id}_{input_base_name}{output_extension}"
     input_filepath = os.path.join(app.config["UPLOAD_FOLDER"], input_filename)
     output_filepath = os.path.join(app.config["OUTPUT_FOLDER"], output_filename)
     file.save(input_filepath)
@@ -360,7 +369,9 @@ def upload_file():
                 "upload.html",
                 error="Please select a valid model from the dropdown (query first)",
                 selected_backend=backend,
-                selected_api_url=request.form.get("api_url", "http://localhost:11434").strip(),
+                selected_api_url=request.form.get(
+                    "api_url", "http://localhost:11434"
+                ).strip(),
             )
         model = model.strip()
 
@@ -380,7 +391,8 @@ def upload_file():
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             input_filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-            output_filename = f"translated_{filename}"
+            input_base_name = os.path.splitext(filename)[0]
+            output_filename = f"translated_{input_base_name}.docx"
             output_filepath = os.path.join(app.config["OUTPUT_FOLDER"], output_filename)
             file.save(input_filepath)
 
@@ -408,7 +420,7 @@ def upload_file():
         if not file or not allowed_file(file.filename):
             return render_template(
                 "upload.html",
-                error="Please upload a valid .docx file",
+                error="Please upload a valid .docx or .pdf file",
                 selected_backend=backend,
                 selected_api_url=api_url,
             )

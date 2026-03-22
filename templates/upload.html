@@ -305,7 +305,7 @@
 <div class="shell">
     <header class="hero">
         <h1>Translate Your Document</h1>
-        <p class="subtitle">Upload a <code>.docx</code> file, choose languages, and run translation or proofreading via Ollama or OpenAI-compatible APIs.</p>
+        <p class="subtitle">Upload a <code>.docx</code> or <code>.pdf</code> file, choose languages, and run translation or proofreading via Ollama or OpenAI-compatible APIs.</p>
     </header>
 
     <form method="post" enctype="multipart/form-data" id="translationForm" class="layout">
@@ -370,9 +370,9 @@
 
             <div class="form-row">
                 <div>
-                    <label for="input_file">Upload Document (.docx)</label>
+                    <label for="input_file">Upload Document (.docx or .pdf)</label>
                     <div class="file-upload">
-                        <input type="file" id="input_file" name="input_file" accept=".docx" required>
+                        <input type="file" id="input_file" name="input_file" accept=".docx,.pdf" required>
                         <label for="input_file" class="file-trigger">Choose File</label>
                         <span class="file-name" id="fileName">No file selected</span>
                     </div>
@@ -563,9 +563,10 @@
                 throw new Error(data.error || 'Failed to fetch status');
             }
 
-            const label = data.total
-                ? (data.message + ' (' + data.completed + '/' + data.total + ')')
-                : data.message;
+            let label = data.message || 'Processing...';
+            if (data.status === 'running' && data.total) {
+                label = 'Processing ' + (data.percent || 0) + '% (' + data.completed + '/' + data.total + ')';
+            }
             showProgress(data.percent || 0, label || 'Processing...');
 
             if (data.status === 'done') {

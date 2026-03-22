@@ -1,6 +1,6 @@
 # TransDocs
 
-This project provides a Python tool for translating or proofreading Microsoft Word documents (`.docx` files) using Ollama or OpenAI-compatible chat APIs. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
+This project provides a Python tool for translating or proofreading documents (`.docx` and `.pdf`) using Ollama or OpenAI-compatible chat APIs. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
 
 **Project Structure:**
 ```
@@ -52,6 +52,7 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 - **Automatic Source Language Detection**: Detects the source language by analyzing at least 50 words from the document.
 - **Manual Source Language Specification**: Option to manually specify the source language using the `-s` or `--source` argument.
 - **Translation of All Document Elements**: Translates paragraphs, tables, headers, and footers within the document.
+- **PDF Layout-Aware Translation**: Translates `.pdf` files and outputs translated `.pdf` by preserving page geometry and text block positions.
 - **Professional Translation Quality**: Enhanced prompts for DeepL-like quality translations that preserve technical content.
 - **Automatic Proofreading Mode**: When source == target language, automatically runs in proofreading mode to fix grammar/spelling.
 - **Explicit Proofreading Flag**: Use `--proofread` to force proofreading regardless of language match.
@@ -215,7 +216,7 @@ A web-based interface is available via `transdoc_app.py`.
 
    - **Choose Backend**: Select `Ollama` or `OpenAI-compatible`.
    - **Query Models**: Enter API URL and click **Query** to load available models.
-   - **Upload Document**: Choose the `.docx` file you want to translate.
+   - **Upload Document**: Choose a `.docx` or `.pdf` file you want to translate.
    - **Source Language**: Optionally select source language.
    - **Target Language**: Select target language.
    - **Model**: Select a model from the dropdown (required).

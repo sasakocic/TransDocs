@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Added OpenAI-compatible backend support for both CLI and web app.
 - Added CLI backend selection via `-b/--backend` (`ollama` or `openai_compatible`).
 - Added backend selector in the web UI connection settings.
+- Added PDF layout-aware translation support (`.pdf` input to translated `.pdf` output).
 
 ### Changed
 - Model query endpoint now supports both Ollama (`/api/tags`) and OpenAI-compatible (`/v1/models`) formats.

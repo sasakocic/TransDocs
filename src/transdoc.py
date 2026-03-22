@@ -92,6 +92,214 @@ def detect_source_language(doc, min_words=50):
         return None
 
 
+def detect_language_from_blocks(text_blocks, min_words=50):
+    """Detect language from extracted text blocks (e.g., PDF pages/paragraphs)."""
+    collected_words = []
+    for block in text_blocks:
+        collected_words.extend(block.split())
+        if len(collected_words) >= min_words:
+            break
+
+    if not collected_words:
+        logger.error("Not enough text to detect source language.")
+        return None
+
+    try:
+        sample = " ".join(collected_words)
+        src_lang = detect(sample)
+        logger.info(f"Detected source language: {src_lang}")
+        return src_lang
+    except LangDetectException as e:
+        logger.error(f"Language detection failed: {e}")
+        return None
+
+
+def extract_pdf_text_blocks(input_file):
+    """Extract text blocks from PDF for translation."""
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise RuntimeError(
+            "PDF support requires 'pypdf'. Install dependencies from requirements.txt."
+        ) from exc
+
+    reader = PdfReader(input_file)
+    blocks = []
+    for page in reader.pages:
+        text = (page.extract_text() or "").strip()
+        if not text:
+            continue
+        # Split large page text into paragraph-like blocks.
+        page_blocks = [part.strip() for part in text.split("\n\n") if part.strip()]
+        if page_blocks:
+            blocks.extend(page_blocks)
+        else:
+            blocks.append(text)
+    return blocks
+
+
+def _load_pymupdf():
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise RuntimeError(
+            "Layout-aware PDF translation requires 'PyMuPDF'. "
+            "Install dependencies from requirements.txt."
+        ) from exc
+    return fitz
+
+
+def extract_pdf_layout(input_file):
+    """Extract page layout blocks for PDF translation with positional fidelity."""
+    fitz = _load_pymupdf()
+    source_pdf = fitz.open(input_file)
+    pages = []
+    plain_text_blocks = []
+
+    try:
+        for page in source_pdf:
+            page_blocks = []
+            for block in page.get_text("blocks"):
+                x0, y0, x1, y1, text = block[:5]
+                block_text = (text or "").strip()
+                if not block_text:
+                    continue
+                page_blocks.append(
+                    {
+                        "bbox": (x0, y0, x1, y1),
+                        "text": block_text,
+                    }
+                )
+                plain_text_blocks.append(block_text)
+
+            pages.append(
+                {
+                    "number": page.number,
+                    "width": page.rect.width,
+                    "height": page.rect.height,
+                    "blocks": page_blocks,
+                }
+            )
+    finally:
+        source_pdf.close()
+
+    return pages, plain_text_blocks
+
+
+def _fit_textbox(page, rect, text, fitz):
+    """Insert translated text in a rectangle with basic font-size fallback."""
+    for size in (11, 10, 9, 8, 7):
+        written = page.insert_textbox(
+            rect,
+            text,
+            fontsize=size,
+            fontname="helv",
+            color=(0, 0, 0),
+            align=fitz.TEXT_ALIGN_LEFT,
+        )
+        if written >= 0:
+            return
+
+    # Last resort: write clipped text near top-left of the block.
+    page.insert_text(
+        fitz.Point(rect.x0, rect.y0 + 8),
+        text[:1000],
+        fontsize=7,
+        fontname="helv",
+        color=(0, 0, 0),
+    )
+
+
+def translate_pdf_layout_to_pdf(
+    input_file,
+    output_file,
+    model,
+    target_lang,
+    api_token,
+    src_lang=None,
+    api_url="http://localhost:11434",
+    force_proofread=False,
+    backend="ollama",
+    progress_callback=None,
+):
+    """Translate PDF while preserving page geometry and text block placement."""
+    fitz = _load_pymupdf()
+    pages, text_blocks = extract_pdf_layout(input_file)
+    if not text_blocks:
+        raise ValueError("No extractable text found in PDF")
+
+    if src_lang:
+        logger.info(f"Using provided source language: {src_lang}")
+    else:
+        logger.info("Detecting source language...")
+        src_lang = detect_language_from_blocks(text_blocks)
+        if not src_lang:
+            logger.error("Source language detection failed. Exiting.")
+            return
+
+    if force_proofread:
+        logger.info("Running in PROOFREADING mode (explicit --proofread flag).")
+    elif src_lang == target_lang:
+        logger.info(
+            f"Source ({src_lang}) equals target ({target_lang}). Running in PROOFREADING mode."
+        )
+    else:
+        logger.info(f"Translating from {src_lang} to {target_lang}.")
+
+    total_units = sum(len(page_data["blocks"]) for page_data in pages)
+    logger.info(f"Processing {total_units} positioned text blocks from PDF")
+    if progress_callback:
+        progress_callback(0, total_units, "Starting translation")
+
+    source_pdf = fitz.open(input_file)
+    output_pdf = fitz.open()
+
+    try:
+        completed = 0
+        for page_data in pages:
+            source_page = source_pdf[page_data["number"]]
+            output_page = output_pdf.new_page(
+                width=page_data["width"], height=page_data["height"]
+            )
+            # Keep original page graphics/layout as background.
+            output_page.show_pdf_page(output_page.rect, source_pdf, page_data["number"])
+
+            translated_blocks = []
+            for block in page_data["blocks"]:
+                translated_text = translate_or_proofread(
+                    block["text"],
+                    src_lang,
+                    target_lang,
+                    model,
+                    api_token,
+                    api_url,
+                    force_proofread=force_proofread,
+                    backend=backend,
+                )
+                translated_blocks.append((fitz.Rect(block["bbox"]), translated_text))
+                completed += 1
+                if progress_callback:
+                    progress_callback(
+                        completed, total_units, f"Processing {completed}/{total_units}"
+                    )
+
+            # Redact original text blocks, then insert translated text at same positions.
+            for rect, _ in translated_blocks:
+                output_page.add_redact_annot(rect, fill=(1, 1, 1))
+            output_page.apply_redactions()
+
+            for rect, translated_text in translated_blocks:
+                _fit_textbox(output_page, rect, translated_text, fitz)
+
+        output_pdf.save(output_file, garbage=4, deflate=True)
+        logger.info(f"Document saved to '{output_file}'")
+        if progress_callback:
+            progress_callback(total_units, total_units, "Completed")
+    finally:
+        source_pdf.close()
+        output_pdf.close()
+
+
 def build_chat_endpoints(api_url, backend):
     """Build ordered chat endpoint candidates for the selected backend."""
     base_url = api_url.rstrip("/")
@@ -174,6 +382,9 @@ Rules:
 - Preserve the original meaning while improving fluency, readability, and correctness.
 - Fix grammatical errors, typos, and awkward phrasing.
 - Maintain formatting, lists, emphasis, and document structure.
+- Preserve line breaks exactly when possible; do not collapse multi-line structure into a single paragraph.
+- Keep output length close to source length to help preserve document/PDF layout.
+- Do not add headings, explanations, or extra sentences.
 - Output ONLY the improved text—no explanations, comments, or notes about changes made.
 
 Text: {text}"""
@@ -183,6 +394,9 @@ Text: {text}"""
 Rules:
 - Keep math formulas (e.g., LaTeX, equations), code, symbols, URLs, numbers, dates, proper names unchanged.
 - Use precise technical terminology; preserve meaning, fluency, and structure (lists, emphasis).
+- Preserve line breaks and list structure exactly when possible.
+- Keep translated text compact and similar in length to source text to improve layout fidelity.
+- Avoid adding or removing sentences unless strictly required by grammar.
 - Output ONLY the translated text—no explanations, warnings, or extras.
 
 Text: {text}"""
@@ -388,6 +602,83 @@ def process_document(
 ):
     try:
         logger.info(f"Opening document '{input_file}'")
+        extension = os.path.splitext(input_file)[1].lower()
+        output_extension = os.path.splitext(output_file)[1].lower()
+
+        if extension == ".pdf":
+            if output_extension == ".pdf":
+                logger.info(
+                    "Detected PDF input/output. Using layout-aware PDF translation."
+                )
+                translate_pdf_layout_to_pdf(
+                    input_file,
+                    output_file,
+                    model,
+                    target_lang,
+                    api_token,
+                    src_lang=src_lang,
+                    api_url=api_url,
+                    force_proofread=force_proofread,
+                    backend=backend,
+                    progress_callback=progress_callback,
+                )
+                return
+
+            logger.info("Detected PDF input. Extracting text blocks...")
+            text_blocks = extract_pdf_text_blocks(input_file)
+            if not text_blocks:
+                raise ValueError("No extractable text found in PDF")
+
+            if src_lang:
+                logger.info(f"Using provided source language: {src_lang}")
+            else:
+                logger.info("Detecting source language...")
+                src_lang = detect_language_from_blocks(text_blocks)
+                if not src_lang:
+                    logger.error("Source language detection failed. Exiting.")
+                    return
+
+            if force_proofread:
+                logger.info("Running in PROOFREADING mode (explicit --proofread flag).")
+            elif src_lang == target_lang:
+                logger.info(
+                    f"Source ({src_lang}) equals target ({target_lang}). Running in PROOFREADING mode."
+                )
+            else:
+                logger.info(f"Translating from {src_lang} to {target_lang}.")
+
+            total_units = len(text_blocks)
+            if progress_callback:
+                progress_callback(0, total_units, "Starting translation")
+
+            output_doc = Document()
+            logger.info(f"Processing {total_units} text blocks from PDF")
+            for index, block in enumerate(text_blocks, start=1):
+                result_text = translate_or_proofread(
+                    block,
+                    src_lang,
+                    target_lang,
+                    model,
+                    api_token,
+                    api_url,
+                    force_proofread=force_proofread,
+                    backend=backend,
+                )
+                output_doc.add_paragraph(result_text)
+                if progress_callback:
+                    progress_callback(
+                        index, total_units, f"Processing {index}/{total_units}"
+                    )
+
+            output_doc.save(output_file)
+            logger.info(f"Document saved to '{output_file}'")
+            if progress_callback:
+                progress_callback(total_units, total_units, "Completed")
+            return
+
+        if extension != ".docx":
+            raise ValueError("Unsupported input format. Use .docx or .pdf")
+
         doc = Document(input_file)
 
         # Use provided source language or detect it
