@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-03-22
+
+### Added
+- Added OpenAI-compatible backend support for both CLI and web app.
+- Added CLI backend selection via `-b/--backend` (`ollama` or `openai_compatible`).
+- Added backend selector in the web UI connection settings.
+
+### Changed
+- Model query endpoint now supports both Ollama (`/api/tags`) and OpenAI-compatible (`/v1/models`) formats.
+- Chat API calls now route to backend-specific endpoints (`/api/chat` or `/v1/chat/completions`).
+- Response parsing now supports both Ollama and OpenAI-compatible response schemas.
+
 ## [1.3.0] - 2026-03-22
 
 ### Added

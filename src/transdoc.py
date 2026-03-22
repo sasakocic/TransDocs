@@ -92,8 +92,72 @@ def detect_source_language(doc, min_words=50):
         return None
 
 
-def call_ollama_api(
-    text, src_lang, target_lang, model, api_token, api_url, mode="translate"
+def build_chat_endpoints(api_url, backend):
+    """Build ordered chat endpoint candidates for the selected backend."""
+    base_url = api_url.rstrip("/")
+    endpoints = []
+
+    def add(url):
+        if url not in endpoints:
+            endpoints.append(url)
+
+    if backend == "openai_compatible":
+        if base_url.endswith(("/v1/chat/completions", "/chat/completions")):
+            add(base_url)
+        elif base_url.endswith("/v1"):
+            add(f"{base_url}/chat/completions")
+        else:
+            add(f"{base_url}/v1/chat/completions")
+        # Fallback for gateways exposing Ollama-style endpoints
+        if base_url.endswith("/api/chat"):
+            add(base_url)
+        else:
+            add(f"{base_url}/api/chat")
+        return endpoints
+
+    # Default: ollama
+    if base_url.endswith(("/api/chat", "/api/generate")):
+        add(base_url)
+    else:
+        add(f"{base_url}/api/chat")
+    # Fallback for gateways exposing OpenAI-compatible endpoints
+    if base_url.endswith(("/v1/chat/completions", "/chat/completions")):
+        add(base_url)
+    elif base_url.endswith("/v1"):
+        add(f"{base_url}/chat/completions")
+    else:
+        add(f"{base_url}/v1/chat/completions")
+    return endpoints
+
+
+def build_chat_endpoint(api_url, backend):
+    """Backward-compatible single endpoint helper (first candidate)."""
+    return build_chat_endpoints(api_url, backend)[0]
+
+
+def _extract_response_text(response_json):
+    """Extract assistant text from Ollama or OpenAI-compatible responses."""
+    if "response" in response_json:
+        return (response_json.get("response") or "").strip()
+
+    message = response_json.get("message", {})
+    if isinstance(message, dict) and "content" in message:
+        return (message.get("content") or "").strip()
+
+    choices = response_json.get("choices", [])
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0] or {}
+        choice_message = first_choice.get("message", {})
+        if isinstance(choice_message, dict) and "content" in choice_message:
+            return (choice_message.get("content") or "").strip()
+        if "text" in first_choice:
+            return (first_choice.get("text") or "").strip()
+
+    return ""
+
+
+def call_chat_api(
+    text, src_lang, target_lang, model, api_token, api_url, mode="translate", backend="ollama"
 ):
     if mode == "proofread":
         prompt = f"""You are a professional proofreader and editor. Review the following text in {src_lang} for grammar, spelling, punctuation, clarity, and style improvements.
@@ -116,7 +180,6 @@ Rules:
 
 Text: {text}"""
 
-    # Use /api/chat endpoint (modern Ollama API)
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -128,58 +191,84 @@ Text: {text}"""
     # Add authorization header only if token is provided
     if api_token:
         headers["Authorization"] = f"Bearer {api_token}"
+        headers["X-API-Key"] = api_token
+        headers["api-key"] = api_token
 
     try:
-        # Extract just the endpoint path for logging
-        import urllib.parse
+        endpoint_candidates = build_chat_endpoints(api_url, backend)
+        last_error = None
+        last_status = None
+        last_response_text = ""
 
-        parsed_url = urllib.parse.urlparse(api_url)
-        endpoint_path = parsed_url.path if parsed_url.path else "/"
+        for endpoint_url in endpoint_candidates:
+            # Extract just the endpoint path for logging
+            import urllib.parse
 
-        logger.debug("=== OLLAMA API CALL DEBUG ===")
-        logger.debug(f"Full URL: {api_url}")
-        logger.debug(f"Endpoint path: {endpoint_path}")
-        logger.debug(f"Model: {model}")
-        logger.debug(f"Messages count: {len(payload.get('messages', []))}")
-        logger.debug(
-            f"Prompt preview (first 200 chars): {payload.get('messages', [{}])[0].get('content', '')[:200]}"
-        )
-        logger.debug(f"Request headers: {headers}")
-        logger.debug("HTTP method being used: POST")
+            parsed_url = urllib.parse.urlparse(endpoint_url)
+            endpoint_path = parsed_url.path if parsed_url.path else "/"
 
-        response = requests.post(api_url, json=payload, headers=headers)
-        logger.debug(f"Response status code: {response.status_code}")
-        logger.debug(f"Response headers: {dict(response.headers)}")
-        logger.debug(f"Response body (raw): {response.text[:500]}")
+            logger.debug("=== CHAT API CALL DEBUG ===")
+            logger.debug(f"Backend: {backend}")
+            logger.debug(f"Full URL: {endpoint_url}")
+            logger.debug(f"Endpoint path: {endpoint_path}")
+            logger.debug(f"Model: {model}")
+            logger.debug(f"Messages count: {len(payload.get('messages', []))}")
+            logger.debug(
+                f"Prompt preview (first 200 chars): {payload.get('messages', [{}])[0].get('content', '')[:200]}"
+            )
+            logger.debug(f"Request headers: {headers}")
+            logger.debug("HTTP method being used: POST")
 
-        # Log full response if error to help debug
-        if response.status_code != 200:
-            logger.error(f"Full response text: {response.text}")
+            response = requests.post(endpoint_url, json=payload, headers=headers)
+            logger.debug(f"Response status code: {response.status_code}")
+            logger.debug(f"Response headers: {dict(response.headers)}")
+            logger.debug(f"Response body (raw): {response.text[:500]}")
 
-        if response.status_code == 200:
-            response_json = response.json()
-            logger.debug(f"API response JSON: {response_json}")
+            # Log full response if error to help debug
+            if response.status_code != 200:
+                logger.error(f"Full response text: {response.text}")
 
-            # Extract response text - handle both /api/chat and /api/generate responses
-            result_text = ""
-            if "response" in response_json:
-                result_text = response_json["response"]
-            elif "message" in response_json and "content" in response_json["message"]:
-                result_text = response_json["message"]["content"]
+            if response.status_code == 200:
+                response_json = response.json()
+                logger.debug(f"API response JSON: {response_json}")
 
-            logger.debug(f"{mode.capitalize()} text: {result_text}")
-            return result_text.strip() if result_text else ""
-        else:
-            logger.error(f"API request failed with status code {response.status_code}")
-            logger.error(f"Response: {response.text}")
-            return text
+                result_text = _extract_response_text(response_json)
+                logger.debug(f"{mode.capitalize()} text: {result_text}")
+                return result_text.strip() if result_text else ""
+
+            last_status = response.status_code
+            last_response_text = response.text
+            last_error = f"HTTP {response.status_code}"
+
+        logger.error(f"API request failed after trying {len(endpoint_candidates)} endpoints")
+        if last_status:
+            logger.error(f"Last status: {last_status}")
+        if last_response_text:
+            logger.error(f"Last response: {last_response_text}")
+        if last_error:
+            logger.error(f"Error: {last_error}")
+        return text
     except Exception as e:
-        logger.exception(f"An error occurred while calling the Ollama API: {e}")
+        logger.exception(f"An error occurred while calling the chat API: {e}")
         return text
 
 
+def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode="translate"):
+    """Backward-compatible wrapper for Ollama-only calls."""
+    return call_chat_api(
+        text,
+        src_lang,
+        target_lang,
+        model,
+        api_token,
+        api_url,
+        mode=mode,
+        backend="ollama",
+    )
+
+
 def translate_or_proofread(
-    text, src_lang, target_lang, model, api_token, api_url, force_proofread=False
+    text, src_lang, target_lang, model, api_token, api_url, force_proofread=False, backend="ollama"
 ):
     logger.debug(f"Text to process: '{text}'")
 
@@ -200,14 +289,14 @@ def translate_or_proofread(
         mode = "translate"
         logger.info(f"Translating from {src_lang} to {target_lang}.")
 
-    result_text = call_ollama_api(
-        text, src_lang, target_lang, model, api_token, api_url, mode=mode
+    result_text = call_chat_api(
+        text, src_lang, target_lang, model, api_token, api_url, mode=mode, backend=backend
     )
     return result_text
 
 
 def process_paragraph(
-    para, src_lang, model, target_lang, api_token, api_url, force_proofread=False
+    para, src_lang, model, target_lang, api_token, api_url, force_proofread=False, backend="ollama"
 ):
     try:
         paragraph_text = "".join(run.text for run in para.runs)
@@ -221,6 +310,7 @@ def process_paragraph(
                 api_token,
                 api_url,
                 force_proofread=force_proofread,
+                backend=backend,
             )
             # Clear existing runs
             for run in para.runs:
@@ -243,6 +333,7 @@ def process_document(
     src_lang=None,
     api_url="http://localhost:11434",
     force_proofread=False,
+    backend="ollama",
 ):
     try:
         logger.info(f"Opening document '{input_file}'")
@@ -278,6 +369,7 @@ def process_document(
                 api_token,
                 api_url,
                 force_proofread=force_proofread,
+                backend=backend,
             )
 
         logger.info("Processing tables in the document")
@@ -293,6 +385,7 @@ def process_document(
                             api_token,
                             api_url,
                             force_proofread=force_proofread,
+                            backend=backend,
                         )
 
         logger.info("Processing headers and footers")
@@ -308,6 +401,7 @@ def process_document(
                     api_token,
                     api_url,
                     force_proofread=force_proofread,
+                    backend=backend,
                 )
             for para in footer.paragraphs:
                 process_paragraph(
@@ -318,6 +412,7 @@ def process_document(
                     api_token,
                     api_url,
                     force_proofread=force_proofread,
+                    backend=backend,
                 )
 
         doc.save(output_file)
@@ -328,7 +423,7 @@ def process_document(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Translate or proofread a Word document using the Ollama API."
+        description="Translate or proofread a Word document using Ollama or OpenAI-compatible chat APIs."
     )
     parser.add_argument(
         "-m",
@@ -397,6 +492,13 @@ def main():
         help="Ollama API base URL (default: http://localhost:11434). Auto-appends /api/chat.",
     )
     parser.add_argument(
+        "-b",
+        "--backend",
+        choices=["ollama", "openai_compatible"],
+        default="ollama",
+        help="API backend type (default: ollama).",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -424,13 +526,9 @@ def main():
     if not args.model or not args.model.strip():
         parser.error("Model name (-m/--model) is required")
 
-    # Auto-append /api/chat endpoint (modern Ollama API)
-    if not args.api_url.endswith(("/api/generate", "/api/chat")):
-        api_url = f"{args.api_url.rstrip('/')}/api/chat"
-    else:
-        api_url = args.api_url
+    api_url = build_chat_endpoint(args.api_url, args.backend)
 
-    logger.info(f"Starting processing with API URL: {api_url}")
+    logger.info(f"Starting processing with backend '{args.backend}' and API URL: {api_url}")
     process_document(
         args.input_file,
         args.output_file,
@@ -440,6 +538,7 @@ def main():
         args.src_lang,
         api_url,
         force_proofread=args.proofread,
+        backend=args.backend,
     )
     logger.info("Processing completed")
 

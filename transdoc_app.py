@@ -30,21 +30,90 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-@app.route("/query_ollama", methods=["POST"])
-def query_ollama():
-    """API endpoint to test Ollama connection and get available models."""
+def build_models_endpoints(api_url, backend):
+    """Build ordered model-list endpoint candidates for the selected backend."""
+    base_url = api_url.rstrip("/")
+    endpoints = []
+
+    def add(url):
+        if url not in endpoints:
+            endpoints.append(url)
+
+    if backend == "openai_compatible":
+        if base_url.endswith(("/v1/models", "/models")):
+            add(base_url)
+        elif base_url.endswith("/v1"):
+            add(f"{base_url}/models")
+        else:
+            add(f"{base_url}/v1/models")
+        # Fallback for Ollama-style gateways
+        if base_url.endswith("/api/tags"):
+            add(base_url)
+        else:
+            add(f"{base_url}/api/tags")
+        return endpoints
+
+    # Default: ollama
+    if base_url.endswith("/api/tags"):
+        add(base_url)
+    else:
+        add(f"{base_url}/api/tags")
+    # Fallback for OpenAI-compatible gateways
+    if base_url.endswith(("/v1/models", "/models")):
+        add(base_url)
+    elif base_url.endswith("/v1"):
+        add(f"{base_url}/models")
+    else:
+        add(f"{base_url}/v1/models")
+    return endpoints
+
+
+def extract_model_names(data):
+    """Extract model names from either Ollama or OpenAI-compatible responses."""
+    items = data.get("data", [])
+    openai_models = [
+        m.get("id") for m in items if isinstance(m, dict) and m.get("id")
+    ]
+    if openai_models:
+        return openai_models
+    items = data.get("models", [])
+    return [m.get("name") for m in items if isinstance(m, dict) and m.get("name")]
+
+
+@app.route("/query_ollama", methods=["POST"])  # backward-compatible endpoint name
+@app.route("/query_models", methods=["POST"])
+def query_models():
+    """API endpoint to test backend connection and get available models."""
     api_url = request.form.get("api_url", "http://localhost:11434").strip()
+    backend = request.form.get("backend", "ollama").strip() or "ollama"
+    api_token = request.form.get("api_token", "").strip() or None
+    if backend not in {"ollama", "openai_compatible"}:
+        backend = "ollama"
+    models_urls = build_models_endpoints(api_url, backend)
+    headers = {}
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+        headers["X-API-Key"] = api_token
+        headers["api-key"] = api_token
 
     try:
-        response = http_requests.get(f"{api_url}/api/tags", timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            models = [m["name"] for m in data.get("models", [])]
-            return jsonify({"success": True, "models": models})
-        else:
-            return jsonify(
-                {"success": False, "error": f"HTTP {response.status_code}"}
-            ), 400
+        last_status = None
+        last_text = ""
+        for models_url in models_urls:
+            response = http_requests.get(models_url, headers=headers, timeout=8)
+            if response.status_code == 200:
+                data = response.json()
+                models = extract_model_names(data)
+                return jsonify({"success": True, "models": models})
+            last_status = response.status_code
+            last_text = response.text[:500]
+        return jsonify(
+            {
+                "success": False,
+                "error": f"HTTP {last_status}",
+                "details": last_text,
+            }
+        ), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -55,39 +124,62 @@ def upload_file():
         # Check if this is a test connection action (for backward compatibility)
         if request.form.get("action") == "test":
             api_url = request.form.get("api_url", "http://localhost:11434").strip()
+            backend = request.form.get("backend", "ollama").strip() or "ollama"
+            api_token = request.form.get("api_token", "").strip() or None
+            models_urls = build_models_endpoints(api_url, backend)
+            headers = {}
+            if api_token:
+                headers["Authorization"] = f"Bearer {api_token}"
+                headers["X-API-Key"] = api_token
+                headers["api-key"] = api_token
 
             try:
-                response = http_requests.get(f"{api_url}/api/tags", timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    models = data.get("models", [])
-                    model_names = [m["name"] for m in models] if models else []
-
-                    if model_names:
-                        result = f"✓ Connected successfully!<br>Available models: {', '.join(model_names)}"
-                        return render_template(
-                            "upload.html",
-                            connection_result=result,
-                            connection_success=True,
-                        )
-                    else:
-                        result = "✓ Connected! No models loaded. Load a model first."
-                        return render_template(
-                            "upload.html",
-                            connection_result=result,
-                            connection_success=True,
-                        )
-                else:
-                    result = f"✗ Connection failed! HTTP {response.status_code}"
+                model_names = []
+                last_status = None
+                for models_url in models_urls:
+                    response = http_requests.get(models_url, headers=headers, timeout=8)
+                    if response.status_code == 200:
+                        data = response.json()
+                        model_names = extract_model_names(data)
+                        break
+                    last_status = response.status_code
+                if model_names:
+                    result = "✓ Connected!"
+                    return render_template(
+                        "upload.html",
+                        connection_result=result,
+                        connection_success=True,
+                        selected_backend=backend,
+                        selected_api_url=api_url,
+                    )
+                if last_status:
+                    result = f"✗ Connection failed! HTTP {last_status}"
                     return render_template(
                         "upload.html",
                         connection_result=result,
                         connection_success=False,
+                        selected_backend=backend,
+                        selected_api_url=api_url,
                     )
-            except Exception as e:
-                result = f"✗ Connection failed!<br>Error: {str(e)}<br><br>Make sure Ollama is running and the URL is correct."
+                result = "✓ Connected! No models loaded. Load a model first."
                 return render_template(
-                    "upload.html", connection_result=result, connection_success=False
+                    "upload.html",
+                    connection_result=result,
+                    connection_success=True,
+                    selected_backend=backend,
+                    selected_api_url=api_url,
+                )
+            except Exception as e:
+                result = (
+                    f"✗ Connection failed!<br>Error: {str(e)}<br><br>"
+                    "Check URL, backend type, and API token if required."
+                )
+                return render_template(
+                    "upload.html",
+                    connection_result=result,
+                    connection_success=False,
+                    selected_backend=backend,
+                    selected_api_url=api_url,
                 )
 
         # Get form data for translation
@@ -96,25 +188,31 @@ def upload_file():
         src_lang = request.form.get("src_lang", "").strip() or None
         api_token = request.form.get("api_token", "").strip() or None
         model = request.form.get("model", "")
+        backend = request.form.get("backend", "ollama").strip() or "ollama"
+        if backend not in {"ollama", "openai_compatible"}:
+            backend = "ollama"
 
         if not model:
             return render_template(
                 "upload.html",
                 error="Please select a valid model from the dropdown (query first)",
+                selected_backend=backend,
+                selected_api_url=request.form.get("api_url", "http://localhost:11434").strip(),
             )
         model = model.strip()
 
         api_url = request.form.get("api_url", "http://localhost:11434").strip()
 
-        # Auto-append /api/chat endpoint (modern Ollama API)
-        if not api_url.endswith(("/api/generate", "/api/chat")):
-            api_url = f"{api_url.rstrip('/')}/api/chat"
-
         logger = __import__("logging").getLogger(__name__)
-        logger.debug(f"Using API URL: {api_url}")
+        logger.debug(f"Using backend '{backend}' with API base URL: {api_url}")
 
         if not target_lang:
-            return render_template("upload.html", error="Target language is required")
+            return render_template(
+                "upload.html",
+                error="Target language is required",
+                selected_backend=backend,
+                selected_api_url=api_url,
+            )
 
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -133,19 +231,30 @@ def upload_file():
                     api_token,
                     src_lang,
                     api_url=api_url,
+                    backend=backend,
                 )
                 return redirect(url_for("download_file", filename=output_filename))
             except Exception as e:
                 return render_template(
-                    "upload.html", error=f"Error processing document: {str(e)}"
+                    "upload.html",
+                    error=f"Error processing document: {str(e)}",
+                    selected_backend=backend,
+                    selected_api_url=api_url,
                 )
 
         if not file or not allowed_file(file.filename):
             return render_template(
-                "upload.html", error="Please upload a valid .docx file"
+                "upload.html",
+                error="Please upload a valid .docx file",
+                selected_backend=backend,
+                selected_api_url=api_url,
             )
 
-    return render_template("upload.html")
+    return render_template(
+        "upload.html",
+        selected_backend="ollama",
+        selected_api_url="http://localhost:11434",
+    )
 
 
 @app.route("/downloads/<filename>")

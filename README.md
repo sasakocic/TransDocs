@@ -1,6 +1,6 @@
 # TransDocs
 
-This project provides a Python tool for translating or proofreading Microsoft Word documents (`.docx` files) using the Ollama API. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
+This project provides a Python tool for translating or proofreading Microsoft Word documents (`.docx` files) using Ollama or OpenAI-compatible chat APIs. The script can automatically detect the source language based on a minimum of 50 words or accept a manually specified source language.
 
 **Project Structure:**
 ```
@@ -19,9 +19,10 @@ TransDocs/
 
 This script is currently not for Production scale workloads but can be used for personal translation tasks.
 
-You need [Ollama](https://github.com/ollama/ollama) installed and running. The script works with both GPU-accelerated and CPU-only Ollama instances.
+You can use [Ollama](https://github.com/ollama/ollama) locally, or any OpenAI-compatible provider exposing `/v1/chat/completions`.
 
-- Default Ollama API URL: `http://localhost:11434` (base URL, `/api/chat` is auto-appended)
+- Default API URL for Ollama: `http://localhost:11434` (base URL, `/api/chat` is auto-appended)
+- OpenAI-compatible base URLs are supported (`/v1/chat/completions` is auto-appended)
 - Works with any model loaded in your Ollama instance
 - **API token is optional** - works without authentication for local instances
 
@@ -54,7 +55,7 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 - **Professional Translation Quality**: Enhanced prompts for DeepL-like quality translations that preserve technical content.
 - **Automatic Proofreading Mode**: When source == target language, automatically runs in proofreading mode to fix grammar/spelling.
 - **Explicit Proofreading Flag**: Use `--proofread` to force proofreading regardless of language match.
-- **Flexible API Configuration**: Accepts base URL and automatically appends `/api/chat`.
+- **Flexible API Configuration**: Supports `ollama` and `openai_compatible` backends with automatic endpoint construction.
 - **CPU Support**: Works on CPU-only systems (no GPU required).
 - **Optional Authentication**: API token is optional for local Ollama instances without authentication requirements.
 - **Detailed Logging**: Provides comprehensive logs to both console and file (`translation_debug.log`) for monitoring and debugging.
@@ -117,7 +118,8 @@ The script `src/transdoc.py` can be executed from the command line to translate 
 - `-m`, `--model MODEL`: Model name to use for translation/proofreading (**required**).
 - `-s`, `--source LANG`: Source language code (e.g., `en`, `de`, `fr`). Auto-detected if not provided. Use same as target for proofreading mode.
 - `--proofread`: Force proofreading mode regardless of language match.
-- `-u`, `--url URL`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/chat`.
+- `-u`, `--url URL`: API base URL (default: `http://localhost:11434`). Endpoint is auto-appended based on backend.
+- `-b`, `--backend {ollama,openai_compatible}`: Backend type (default: `ollama`).
 
 #### Examples
 
@@ -152,6 +154,14 @@ The script `src/transdoc.py` can be executed from the command line to translate 
    ```
 
    This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/chat`.
+
+5. **Translate Using OpenAI-Compatible API**
+
+   ```bash
+   python src/transdoc.py -i input.docx -o output.docx -t de -m gpt-4o-mini -b openai_compatible -u https://api.example.com -k your_api_token
+   ```
+
+   This command targets an OpenAI-compatible endpoint and automatically appends `/v1/chat/completions`.
 
 5. **Proofread a Document (Same Language)**
 
@@ -203,7 +213,8 @@ A web-based interface is available via `transdoc_app.py`.
 
 3. **Upload and Translate**
 
-   - **Query Ollama**: Enter your Ollama URL and click **Query** to load available models.
+   - **Choose Backend**: Select `Ollama` or `OpenAI-compatible`.
+   - **Query Models**: Enter API URL and click **Query** to load available models.
    - **Upload Document**: Choose the `.docx` file you want to translate.
    - **Source Language**: Optionally select source language.
    - **Target Language**: Select target language.
