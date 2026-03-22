@@ -263,6 +263,33 @@
             font-size: 0.92rem;
         }
 
+        .progress-wrap {
+            margin-top: 14px;
+            display: none;
+        }
+
+        .progress-text {
+            margin: 0 0 8px;
+            color: #25423d;
+            font-weight: 600;
+        }
+
+        .progress-track {
+            width: 100%;
+            background: #e6efeb;
+            border-radius: 999px;
+            height: 12px;
+            overflow: hidden;
+            border: 1px solid #d0e1da;
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #0f766e, #1f9c8f);
+            transition: width 0.35s ease;
+        }
+
         @keyframes fade-in {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
@@ -443,6 +470,12 @@
             </div>
 
             <button type="submit" class="btn btn-submit">Translate Document</button>
+            <div class="progress-wrap" id="progressWrap">
+                <p class="progress-text" id="progressText">Preparing...</p>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
 
             <p class="footer-note">Query first, then choose a model. For proofreading mode, set source and target to the same language.</p>
         </section>
@@ -452,6 +485,7 @@
 <script>
 (function () {
     const queryBtn = document.getElementById('queryBtn');
+    const translationForm = document.getElementById('translationForm');
     const backendSelect = document.getElementById('backend');
     const apiUrlInput = document.getElementById('api_url');
     const apiTokenInput = document.getElementById('api_token');
@@ -459,6 +493,11 @@
     const statusDiv = document.getElementById('connectionStatus');
     const fileInput = document.getElementById('input_file');
     const fileName = document.getElementById('fileName');
+    const submitBtn = translationForm.querySelector('button[type="submit"]');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressText = document.getElementById('progressText');
+    const progressFill = document.getElementById('progressFill');
+    let pollTimer = null;
 
     async function queryModels() {
         const url = apiUrlInput.value.trim() || 'http://localhost:11434';
@@ -500,7 +539,89 @@
         }
     }
 
+    function setBusy(isBusy) {
+        submitBtn.disabled = isBusy;
+        queryBtn.disabled = isBusy;
+        if (isBusy) {
+            submitBtn.textContent = 'Translating...';
+        } else {
+            submitBtn.textContent = 'Translate Document';
+        }
+    }
+
+    function showProgress(percent, text) {
+        progressWrap.style.display = 'block';
+        progressFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
+        progressText.textContent = text;
+    }
+
+    async function pollStatus(jobId) {
+        try {
+            const response = await fetch('/translation_status/' + jobId);
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to fetch status');
+            }
+
+            const label = data.total
+                ? (data.message + ' (' + data.completed + '/' + data.total + ')')
+                : data.message;
+            showProgress(data.percent || 0, label || 'Processing...');
+
+            if (data.status === 'done') {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                showProgress(100, 'Completed');
+                setBusy(false);
+                if (data.download_url) {
+                    window.location.href = data.download_url;
+                }
+            } else if (data.status === 'error') {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                setBusy(false);
+                statusDiv.innerHTML = '<div class="alert alert-danger">Translation failed: ' + (data.error || 'Unknown error') + '</div>';
+            }
+        } catch (error) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            setBusy(false);
+            statusDiv.innerHTML = '<div class="alert alert-danger">Progress polling failed: ' + error.message + '</div>';
+        }
+    }
+
+    async function startTranslation(event) {
+        event.preventDefault();
+        statusDiv.innerHTML = '';
+        showProgress(0, 'Submitting job...');
+        setBusy(true);
+
+        const formData = new FormData(translationForm);
+
+        try {
+            const response = await fetch('/start_translation', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to start translation');
+            }
+
+            showProgress(0, 'Job started');
+            pollStatus(data.job_id);
+            pollTimer = setInterval(function () {
+                pollStatus(data.job_id);
+            }, 1200);
+        } catch (error) {
+            setBusy(false);
+            progressWrap.style.display = 'none';
+            statusDiv.innerHTML = '<div class="alert alert-danger">' + error.message + '</div>';
+        }
+    }
+
     queryBtn.addEventListener('click', queryModels);
+    translationForm.addEventListener('submit', startTranslation);
     fileInput.addEventListener('change', function () {
         fileName.textContent = fileInput.files.length ? fileInput.files[0].name : 'No file selected';
     });

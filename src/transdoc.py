@@ -324,6 +324,24 @@ def process_paragraph(
         logger.exception(f"An error occurred while processing paragraph: {e}")
 
 
+def iter_document_paragraphs(doc):
+    """Yield all paragraphs that are processed (body, tables, headers, footers)."""
+    for para in doc.paragraphs:
+        yield para
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    yield para
+
+    for section in doc.sections:
+        for para in section.header.paragraphs:
+            yield para
+        for para in section.footer.paragraphs:
+            yield para
+
+
 def process_document(
     input_file,
     output_file,
@@ -334,6 +352,7 @@ def process_document(
     api_url="http://localhost:11434",
     force_proofread=False,
     backend="ollama",
+    progress_callback=None,
 ):
     try:
         logger.info(f"Opening document '{input_file}'")
@@ -359,8 +378,13 @@ def process_document(
         else:
             logger.info(f"Translating from {src_lang} to {target_lang}.")
 
-        logger.info("Processing main document paragraphs")
-        for para in doc.paragraphs:
+        all_paragraphs = list(iter_document_paragraphs(doc))
+        total_units = len(all_paragraphs)
+        logger.info(f"Processing {total_units} text blocks")
+        if progress_callback:
+            progress_callback(0, total_units, "Starting translation")
+
+        for index, para in enumerate(all_paragraphs, start=1):
             process_paragraph(
                 para,
                 src_lang,
@@ -371,54 +395,16 @@ def process_document(
                 force_proofread=force_proofread,
                 backend=backend,
             )
-
-        logger.info("Processing tables in the document")
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    for para in cell.paragraphs:
-                        process_paragraph(
-                            para,
-                            src_lang,
-                            model,
-                            target_lang,
-                            api_token,
-                            api_url,
-                            force_proofread=force_proofread,
-                            backend=backend,
-                        )
-
-        logger.info("Processing headers and footers")
-        for section in doc.sections:
-            header = section.header
-            footer = section.footer
-            for para in header.paragraphs:
-                process_paragraph(
-                    para,
-                    src_lang,
-                    model,
-                    target_lang,
-                    api_token,
-                    api_url,
-                    force_proofread=force_proofread,
-                    backend=backend,
-                )
-            for para in footer.paragraphs:
-                process_paragraph(
-                    para,
-                    src_lang,
-                    model,
-                    target_lang,
-                    api_token,
-                    api_url,
-                    force_proofread=force_proofread,
-                    backend=backend,
-                )
+            if progress_callback:
+                progress_callback(index, total_units, f"Processing {index}/{total_units}")
 
         doc.save(output_file)
         logger.info(f"Document saved to '{output_file}'")
+        if progress_callback:
+            progress_callback(total_units, total_units, "Completed")
     except Exception as e:
         logger.exception(f"An error occurred while processing the document: {e}")
+        raise
 
 
 def main():

@@ -3,6 +3,8 @@ Flask web application for TransDocs - Document Translation and Proofreading Tool
 """
 
 import os
+import threading
+import uuid
 import requests as http_requests
 from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify
 from werkzeug.utils import secure_filename
@@ -25,9 +27,97 @@ app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+TRANSLATION_JOBS = {}
+TRANSLATION_JOBS_LOCK = threading.Lock()
+
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def create_job_state(job_id, filename):
+    with TRANSLATION_JOBS_LOCK:
+        TRANSLATION_JOBS[job_id] = {
+            "id": job_id,
+            "status": "queued",
+            "message": "Queued",
+            "error": None,
+            "completed": 0,
+            "total": 0,
+            "percent": 0,
+            "output_filename": filename,
+        }
+
+
+def update_job_state(job_id, **updates):
+    with TRANSLATION_JOBS_LOCK:
+        if job_id in TRANSLATION_JOBS:
+            TRANSLATION_JOBS[job_id].update(updates)
+
+
+def get_job_state(job_id):
+    with TRANSLATION_JOBS_LOCK:
+        job = TRANSLATION_JOBS.get(job_id)
+        return dict(job) if job else None
+
+
+def run_translation_job(
+    job_id,
+    input_filepath,
+    output_filepath,
+    output_filename,
+    model,
+    target_lang,
+    api_token,
+    src_lang,
+    api_url,
+    backend,
+):
+    try:
+        update_job_state(job_id, status="running", message="Initializing translation")
+
+        def progress_callback(completed, total, message):
+            percent = int((completed / total) * 100) if total else 0
+            update_job_state(
+                job_id,
+                completed=completed,
+                total=total,
+                percent=percent,
+                message=message or f"Processing {completed}/{total}",
+                status="running",
+            )
+
+        process_document(
+            input_filepath,
+            output_filepath,
+            model,
+            target_lang,
+            api_token,
+            src_lang,
+            api_url=api_url,
+            backend=backend,
+            progress_callback=progress_callback,
+        )
+
+        if not os.path.exists(output_filepath):
+            raise RuntimeError("Translation completed but output file was not created")
+
+        update_job_state(
+            job_id,
+            status="done",
+            message="Translation completed",
+            completed=max(get_job_state(job_id).get("completed", 0), 1),
+            total=max(get_job_state(job_id).get("total", 1), 1),
+            percent=100,
+            output_filename=output_filename,
+        )
+    except Exception as exc:
+        update_job_state(
+            job_id,
+            status="error",
+            error=str(exc),
+            message="Translation failed",
+        )
 
 
 def build_models_endpoints(api_url, backend):
@@ -116,6 +206,79 @@ def query_models():
         ), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route("/start_translation", methods=["POST"])
+def start_translation():
+    file = request.files.get("input_file")
+    target_lang = request.form.get("target_lang", "").strip()
+    src_lang = request.form.get("src_lang", "").strip() or None
+    api_token = request.form.get("api_token", "").strip() or None
+    model = request.form.get("model", "").strip()
+    backend = request.form.get("backend", "ollama").strip() or "ollama"
+    api_url = request.form.get("api_url", "http://localhost:11434").strip()
+
+    if backend not in {"ollama", "openai_compatible"}:
+        backend = "ollama"
+
+    if not model:
+        return jsonify({"success": False, "error": "Please select a valid model"}), 400
+    if not target_lang:
+        return jsonify({"success": False, "error": "Target language is required"}), 400
+    if not file or not allowed_file(file.filename):
+        return jsonify({"success": False, "error": "Please upload a valid .docx file"}), 400
+
+    filename = secure_filename(file.filename)
+    job_id = uuid.uuid4().hex
+    input_filename = f"{job_id}_{filename}"
+    output_filename = f"translated_{job_id}_{filename}"
+    input_filepath = os.path.join(app.config["UPLOAD_FOLDER"], input_filename)
+    output_filepath = os.path.join(app.config["OUTPUT_FOLDER"], output_filename)
+    file.save(input_filepath)
+
+    create_job_state(job_id, output_filename)
+
+    worker = threading.Thread(
+        target=run_translation_job,
+        args=(
+            job_id,
+            input_filepath,
+            output_filepath,
+            output_filename,
+            model,
+            target_lang,
+            api_token,
+            src_lang,
+            api_url,
+            backend,
+        ),
+        daemon=True,
+    )
+    worker.start()
+
+    return jsonify({"success": True, "job_id": job_id})
+
+
+@app.route("/translation_status/<job_id>", methods=["GET"])
+def translation_status(job_id):
+    job = get_job_state(job_id)
+    if not job:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    response = {
+        "success": True,
+        "status": job["status"],
+        "message": job.get("message", ""),
+        "error": job.get("error"),
+        "completed": job.get("completed", 0),
+        "total": job.get("total", 0),
+        "percent": job.get("percent", 0),
+    }
+    if job["status"] == "done":
+        response["download_url"] = url_for(
+            "download_file", filename=job["output_filename"]
+        )
+    return jsonify(response)
 
 
 @app.route("/", methods=["GET", "POST"])
