@@ -157,7 +157,14 @@ def _extract_response_text(response_json):
 
 
 def call_chat_api(
-    text, src_lang, target_lang, model, api_token, api_url, mode="translate", backend="ollama"
+    text,
+    src_lang,
+    target_lang,
+    model,
+    api_token,
+    api_url,
+    mode="translate",
+    backend="ollama",
 ):
     if mode == "proofread":
         prompt = f"""You are a professional proofreader and editor. Review the following text in {src_lang} for grammar, spelling, punctuation, clarity, and style improvements.
@@ -240,7 +247,9 @@ Text: {text}"""
             last_response_text = response.text
             last_error = f"HTTP {response.status_code}"
 
-        logger.error(f"API request failed after trying {len(endpoint_candidates)} endpoints")
+        logger.error(
+            f"API request failed after trying {len(endpoint_candidates)} endpoints"
+        )
         if last_status:
             logger.error(f"Last status: {last_status}")
         if last_response_text:
@@ -253,7 +262,9 @@ Text: {text}"""
         return text
 
 
-def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode="translate"):
+def call_ollama_api(
+    text, src_lang, target_lang, model, api_token, api_url, mode="translate"
+):
     """Backward-compatible wrapper for Ollama-only calls."""
     return call_chat_api(
         text,
@@ -268,7 +279,14 @@ def call_ollama_api(text, src_lang, target_lang, model, api_token, api_url, mode
 
 
 def translate_or_proofread(
-    text, src_lang, target_lang, model, api_token, api_url, force_proofread=False, backend="ollama"
+    text,
+    src_lang,
+    target_lang,
+    model,
+    api_token,
+    api_url,
+    force_proofread=False,
+    backend="ollama",
 ):
     logger.debug(f"Text to process: '{text}'")
 
@@ -290,13 +308,27 @@ def translate_or_proofread(
         logger.info(f"Translating from {src_lang} to {target_lang}.")
 
     result_text = call_chat_api(
-        text, src_lang, target_lang, model, api_token, api_url, mode=mode, backend=backend
+        text,
+        src_lang,
+        target_lang,
+        model,
+        api_token,
+        api_url,
+        mode=mode,
+        backend=backend,
     )
     return result_text
 
 
 def process_paragraph(
-    para, src_lang, model, target_lang, api_token, api_url, force_proofread=False, backend="ollama"
+    para,
+    src_lang,
+    model,
+    target_lang,
+    api_token,
+    api_url,
+    force_proofread=False,
+    backend="ollama",
 ):
     try:
         paragraph_text = "".join(run.text for run in para.runs)
@@ -396,7 +428,9 @@ def process_document(
                 backend=backend,
             )
             if progress_callback:
-                progress_callback(index, total_units, f"Processing {index}/{total_units}")
+                progress_callback(
+                    index, total_units, f"Processing {index}/{total_units}"
+                )
 
         doc.save(output_file)
         logger.info(f"Document saved to '{output_file}'")
@@ -514,7 +548,9 @@ def main():
 
     api_url = build_chat_endpoint(args.api_url, args.backend)
 
-    logger.info(f"Starting processing with backend '{args.backend}' and API URL: {api_url}")
+    logger.info(
+        f"Starting processing with backend '{args.backend}' and API URL: {api_url}"
+    )
     process_document(
         args.input_file,
         args.output_file,
