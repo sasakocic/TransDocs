@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-03-22
+
+### Added
+- Added Flask to `requirements.txt` to ensure the web GUI runs from a standard dependency install.
+- Improved web UI file input with a styled upload control and selected filename display.
+
+### Changed
+- Redesigned the web upload page with a modern responsive layout and improved visual hierarchy.
+- Simplified the Ollama connection success message to `✓ Connected!` (models remain in dropdown only).
+
+### Fixed
+- Fixed web form submission so the selected model is correctly posted to backend validation.
+- Corrected Serbian Latin language code from `sr` to `sr-Latn` to avoid unintended Cyrillic output.
+
 ## [1.2.0] - 2026-03-21
 
 ### Added

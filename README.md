@@ -21,7 +21,7 @@ This script is currently not for Production scale workloads but can be used for 
 
 You need [Ollama](https://github.com/ollama/ollama) installed and running. The script works with both GPU-accelerated and CPU-only Ollama instances.
 
-- Default Ollama API URL: `http://localhost:11434` (base URL, `/api/generate` is auto-appended)
+- Default Ollama API URL: `http://localhost:11434` (base URL, `/api/chat` is auto-appended)
 - Works with any model loaded in your Ollama instance
 - **API token is optional** - works without authentication for local instances
 
@@ -54,11 +54,13 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 - **Professional Translation Quality**: Enhanced prompts for DeepL-like quality translations that preserve technical content.
 - **Automatic Proofreading Mode**: When source == target language, automatically runs in proofreading mode to fix grammar/spelling.
 - **Explicit Proofreading Flag**: Use `--proofread` to force proofreading regardless of language match.
-- **Flexible API Configuration**: Accepts base URL and automatically appends `/api/generate`.
+- **Flexible API Configuration**: Accepts base URL and automatically appends `/api/chat`.
 - **CPU Support**: Works on CPU-only systems (no GPU required).
 - **Optional Authentication**: API token is optional for local Ollama instances without authentication requirements.
 - **Detailed Logging**: Provides comprehensive logs to both console and file (`translation_debug.log`) for monitoring and debugging.
 - **Web GUI**: Flask-based web interface for easy document upload and translation.
+- **Model Query in Web GUI**: Query Ollama for available models and select from a dropdown before translating.
+- **Serbian Script Support**: Distinct language codes for Serbian Latin (`sr-Latn`) and Cyrillic (`sr-Cyrl`).
 
 ## Requirements
 
@@ -90,7 +92,7 @@ Speed depends on doc size, number of paragraphs, and hardware. On CPU-only syste
 3. **Install Dependencies**
 
    ```bash
-   pip install python-docx requests langdetect flask werkzeug
+   python -m pip install -r requirements.txt
    ```
 
 4. **Install Ollama and Load a Model**
@@ -112,10 +114,10 @@ The script `src/transdoc.py` can be executed from the command line to translate 
 - `-o`, `--output FILE` (required): Path to save the output Word document file.
 - `-t`, `--target LANG` (required): Target language code (e.g., `en`, `de`, `fr`). Use same as source for proofreading mode.
 - `-k`, `--api-token TOKEN`: API token for Ollama authentication (**optional**).
-- `-m`, `--model MODEL`: Model name to use for translation/proofreading (default: `llama3.2`).
+- `-m`, `--model MODEL`: Model name to use for translation/proofreading (**required**).
 - `-s`, `--source LANG`: Source language code (e.g., `en`, `de`, `fr`). Auto-detected if not provided. Use same as target for proofreading mode.
 - `--proofread`: Force proofreading mode regardless of language match.
-- `-u`, `--url URL`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/generate`.
+- `-u`, `--url URL`: Ollama API base URL (default: `http://localhost:11434`). The script automatically appends `/api/chat`.
 
 #### Examples
 
@@ -149,7 +151,7 @@ The script `src/transdoc.py` can be executed from the command line to translate 
    python src/transdoc.py -i input.docx -o output.docx -t de -u http://192.168.1.50:11434/
    ```
 
-   This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/generate`.
+   This command connects to a remote Ollama server at `http://192.168.1.50:11434/`. The script automatically appends `/api/chat`.
 
 5. **Proofread a Document (Same Language)**
 
@@ -172,7 +174,7 @@ The script `src/transdoc.py` can be executed from the command line to translate 
 1. **Ensure All Dependencies Are Installed**
 
    ```bash
-   pip install python-docx requests langdetect
+   python -m pip install -r requirements.txt
    ```
 
 2. **Execute the Script**
@@ -201,10 +203,11 @@ A web-based interface is available via `transdoc_app.py`.
 
 3. **Upload and Translate**
 
+   - **Query Ollama**: Enter your Ollama URL and click **Query** to load available models.
    - **Upload Document**: Choose the `.docx` file you want to translate.
-   - **Source Language**: Optionally enter the source language code.
-   - **Target Language**: Enter the target language code.
-   - **Model**: Optionally specify a different model.
+   - **Source Language**: Optionally select source language.
+   - **Target Language**: Select target language.
+   - **Model**: Select a model from the dropdown (required).
    - **API Token**: Enter your Ollama API token (optional).
    - **Translate**: Click the "Translate" button to start the translation process.
 
