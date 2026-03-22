@@ -158,7 +158,7 @@ def download_file(filename):
 if __name__ == "__main__":
     import os
 
-    debug = os.environ.get("FLASK_DEBUG", "1") != "0"
+    debug = os.environ.get("FLASK_DEBUG", "0") != "0"
     host = os.environ.get(
         "FLASK_HOST", "0.0.0.0"
     )  # Default to all interfaces for LAN access

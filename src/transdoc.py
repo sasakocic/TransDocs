@@ -7,6 +7,7 @@ and proofreading capabilities.
 """
 
 import argparse
+import os
 from docx import Document
 import requests
 import logging
@@ -34,16 +35,12 @@ class ColorFormatter(logging.Formatter):
         return super().format(record)
 
 
-# Logging configuration - FULL DEBUG on console!
+# Logging configuration
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 file_handler = logging.FileHandler("translation_debug.log", "w", encoding="utf-8")
 console_handler = logging.StreamHandler()
-
-# BOTH handlers at DEBUG level for complete logs
-file_handler.setLevel(logging.DEBUG)
-console_handler.setLevel(logging.DEBUG)
 
 # Use colorful formatter for console, plain text for file
 console_formatter = ColorFormatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -52,8 +49,20 @@ file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(console_formatter)
 file_handler.setFormatter(file_formatter)
 
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+if not logger.handlers:
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+
+def configure_logging(level_name="INFO"):
+    """Configure logger and handlers with a shared log level."""
+    level = getattr(logging, str(level_name).upper(), logging.INFO)
+    logger.setLevel(level)
+    file_handler.setLevel(level)
+    console_handler.setLevel(level)
+
+
+configure_logging(os.environ.get("TRANSDOC_LOG_LEVEL", "INFO"))
 
 
 def detect_source_language(doc, min_words=50):
@@ -387,7 +396,29 @@ def main():
         metavar="URL",
         help="Ollama API base URL (default: http://localhost:11434). Auto-appends /api/chat.",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Enable verbose logging. Use -v for DEBUG logs.",
+    )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default=None,
+        help="Explicit log level override (default: INFO).",
+    )
     args = parser.parse_args()
+
+    if args.log_level:
+        log_level = args.log_level
+    elif args.verbose >= 1:
+        log_level = "DEBUG"
+    else:
+        log_level = os.environ.get("TRANSDOC_LOG_LEVEL", "INFO")
+    configure_logging(log_level)
 
     # Validate model is provided
     if not args.model or not args.model.strip():
