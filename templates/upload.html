@@ -37,7 +37,7 @@
     <!-- Available Models Dropdown (Populated by Query) -->
     {% if available_models %}
     <div class="alert alert-success mt-2">
-        ✓ Connected! Available models: {{ available_models }}
+        ✓ Connected!
     </div>
     {% endif %}
 
@@ -56,6 +56,7 @@
     <!-- Document Translation Form -->
     <form method="post" enctype="multipart/form-data" id="translationForm">
         <input type="hidden" name="api_url" id="url_input" value="http://localhost:11434">
+        <input type="hidden" name="model" id="model_input" value="">
         
         <hr class="my-4">
         
@@ -191,7 +192,7 @@ function testConnection(event) {
     const statusDiv = document.getElementById('connectionStatus');
     
     // Disable button during query
-    const btn = event.target;
+    const btn = event.target.querySelector('button[type="submit"]');
     btn.disabled = true;
     btn.textContent = 'Querying...';
 
@@ -213,7 +214,7 @@ function testConnection(event) {
             });
             
             // Show success message inline (green)
-            statusDiv.innerHTML = '<div class="alert alert-success">✓ Connected! Available models: ' + data.models.join(', ') + '</div>';
+            statusDiv.innerHTML = '<div class="alert alert-success">✓ Connected!</div>';
         } else {
             // Show error
             statusDiv.innerHTML = '<div class="alert alert-danger">✗ Connection failed!<br>Error: ' + data.error + '</div>';
@@ -233,6 +234,14 @@ function testConnection(event) {
 // Sync URL input with hidden field
 document.getElementById('api_url').addEventListener('input', function(e) {
     document.getElementById('url_input').value = e.target.value;
+});
+
+// Sync selected model with hidden field in translation form
+const modelSelect = document.getElementById('model');
+const modelInput = document.getElementById('model_input');
+modelInput.value = modelSelect.value;
+modelSelect.addEventListener('change', function(e) {
+    modelInput.value = e.target.value;
 });
 </script>
 </body>
