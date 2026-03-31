@@ -257,7 +257,6 @@ def translate_pdf_layout_to_pdf(
     try:
         completed = 0
         for page_data in pages:
-            source_page = source_pdf[page_data["number"]]
             output_page = output_pdf.new_page(
                 width=page_data["width"], height=page_data["height"]
             )
